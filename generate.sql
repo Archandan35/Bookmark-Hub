@@ -229,9 +229,14 @@ BEGIN
         NEW.email,
         COALESCE(NEW.raw_user_metadata->>'username', split_part(NEW.email, '@', 1)),
         COALESCE(NEW.raw_user_metadata->>'name', '')
-    );
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        username = COALESCE(EXCLUDED.username, public.users.username),
+        name = COALESCE(EXCLUDED.name, public.users.name);
 
-    INSERT INTO public.settings (user_id) VALUES (NEW.id);
+    INSERT INTO public.settings (user_id) VALUES (NEW.id)
+    ON CONFLICT (user_id) DO NOTHING;
 
     RETURN NEW;
 END;
@@ -301,6 +306,18 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- Keepalive RPC function
+CREATE OR REPLACE FUNCTION public.keepalive()
+RETURNS JSON AS $$
+BEGIN
+    RETURN json_build_object(
+        'status', 'ok',
+        'timestamp', NOW(),
+        'service', 'bookmarkhub'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
@@ -318,37 +335,49 @@ ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media_progress ENABLE ROW LEVEL SECURITY;
 
 -- Users policies
+DROP POLICY IF EXISTS users_select_own ON public.users;
 CREATE POLICY users_select_own ON public.users FOR SELECT USING (id = auth.uid());
+DROP POLICY IF EXISTS users_update_own ON public.users;
 CREATE POLICY users_update_own ON public.users FOR UPDATE USING (id = auth.uid());
+DROP POLICY IF EXISTS users_admin_all ON public.users;
 CREATE POLICY users_admin_all ON public.users FOR ALL USING (full_access = true);
 
 -- Collections policies
+DROP POLICY IF EXISTS collections_owner ON public.collections;
 CREATE POLICY collections_owner ON public.collections FOR ALL USING (user_id = auth.uid());
 
 -- Bookmarks policies
+DROP POLICY IF EXISTS bookmarks_owner ON public.bookmarks;
 CREATE POLICY bookmarks_owner ON public.bookmarks FOR ALL USING (user_id = auth.uid());
 
 -- Tags policies
+DROP POLICY IF EXISTS tags_owner ON public.tags;
 CREATE POLICY tags_owner ON public.tags FOR ALL USING (user_id = auth.uid());
 
 -- Bookmark tags policies
+DROP POLICY IF EXISTS bookmark_tags_owner ON public.bookmark_tags;
 CREATE POLICY bookmark_tags_owner ON public.bookmark_tags FOR ALL USING (
     bookmark_id IN (SELECT id FROM public.bookmarks WHERE user_id = auth.uid())
 );
 
 -- Study sessions policies
+DROP POLICY IF EXISTS study_sessions_owner ON public.study_sessions;
 CREATE POLICY study_sessions_owner ON public.study_sessions FOR ALL USING (user_id = auth.uid());
 
 -- Notes policies
+DROP POLICY IF EXISTS notes_owner ON public.notes;
 CREATE POLICY notes_owner ON public.notes FOR ALL USING (user_id = auth.uid());
 
 -- Settings policies
+DROP POLICY IF EXISTS settings_owner ON public.settings;
 CREATE POLICY settings_owner ON public.settings FOR ALL USING (user_id = auth.uid());
 
 -- Activity logs policies
+DROP POLICY IF EXISTS activity_logs_owner ON public.activity_logs;
 CREATE POLICY activity_logs_owner ON public.activity_logs FOR ALL USING (user_id = auth.uid());
 
 -- Media progress policies
+DROP POLICY IF EXISTS media_progress_owner ON public.media_progress;
 CREATE POLICY media_progress_owner ON public.media_progress FOR ALL USING (user_id = auth.uid());
 
 -- ============================================
@@ -364,20 +393,6 @@ CREATE TABLE IF NOT EXISTS public.keepalive_log (
 -- Index for keepalive log queries
 CREATE INDEX IF NOT EXISTS idx_keepalive_log_created_at ON public.keepalive_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_keepalive_log_source ON public.keepalive_log(source);
-
--- ============================================
--- 12. KEEPALIVE RPC FUNCTION
--- ============================================
-CREATE OR REPLACE FUNCTION public.keepalive()
-RETURNS JSON AS $$
-BEGIN
-    RETURN json_build_object(
-        'status', 'ok',
-        'timestamp', NOW(),
-        'service', 'bookmarkhub'
-    );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================
 -- SEED DATA (Optional - uncomment if needed)
