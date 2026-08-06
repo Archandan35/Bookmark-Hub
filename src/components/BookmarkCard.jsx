@@ -1,17 +1,27 @@
 import { useState } from 'react'
 import {
-  Heart, MoreVertical, ExternalLink, Star, Clock, Eye,
+  Heart, MoreVertical, ExternalLink, Star, Clock, Eye, Play, Image, FileText, Music, Code,
 } from 'lucide-react'
 import { Card } from './Card'
 import { Badge } from './Badge'
 import { Dropdown } from './Dropdown'
 import { ContextMenu } from './ContextMenu'
-import { BOOKMARK_TYPE_CONFIG } from '../constants'
+import { BOOKMARK_TYPE_CONFIG, BOOKMARK_TYPES } from '../constants'
 import { cn, formatRelativeTime, truncate } from '../utils/helpers'
 
-export function BookmarkCard({ bookmark, onOpen, onFavorite, onEdit, onDelete, onDuplicate }) {
+const TYPE_ICONS = {
+  [BOOKMARK_TYPES.VIDEO]: Play,
+  [BOOKMARK_TYPES.AUDIO]: Music,
+  [BOOKMARK_TYPES.IMAGE]: Image,
+  [BOOKMARK_TYPES.PDF]: FileText,
+  [BOOKMARK_TYPES.CODE]: Code,
+  [BOOKMARK_TYPES.MARKDOWN]: FileText,
+}
+
+export function BookmarkCard({ bookmark, onOpen, onFavorite, onEdit, onDuplicate }) {
   const [contextMenu, setContextMenu] = useState(null)
   const typeConfig = BOOKMARK_TYPE_CONFIG[bookmark.type] || BOOKMARK_TYPE_CONFIG.website
+  const TypeIcon = TYPE_ICONS[bookmark.type]
 
   const handleContextMenu = (e) => {
     e.preventDefault()

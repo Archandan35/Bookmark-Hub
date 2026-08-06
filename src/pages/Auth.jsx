@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
-import { Mail, Lock, User, ArrowRight, Phone, AtSign } from 'lucide-react'
+import { Mail, Lock, User, ArrowRight, Phone, AtSign, Eye, EyeOff, Check, X } from 'lucide-react'
 import { Button } from '../components/Button'
 import { Input } from '../components/Input'
 import { Card } from '../components/Card'
@@ -8,20 +8,43 @@ import { AuthService } from '../services/AuthService'
 import { useAuthStore } from '../hooks/useStore'
 import { cn } from '../utils/helpers'
 
-const LOGIN_METHODS = [
-  { id: 'email', label: 'Email', icon: Mail },
-  { id: 'username', label: 'Username', icon: AtSign },
-  { id: 'mobile', label: 'Mobile', icon: Phone },
+const PASSWORD_RULES = [
+  { id: 'length', label: 'At least 8 characters', test: (v) => v?.length >= 8 },
+  { id: 'uppercase', label: 'One uppercase letter', test: (v) => /[A-Z]/.test(v || '') },
+  { id: 'lowercase', label: 'One lowercase letter', test: (v) => /[a-z]/.test(v || '') },
+  { id: 'number', label: 'One number', test: (v) => /\d/.test(v || '') },
+  { id: 'special', label: 'One special symbol (!@#$%^&*)', test: (v) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(v || '') },
 ]
 
 export function Auth() {
   const [mode, setMode] = useState('login')
-  const [loginMethod, setLoginMethod] = useState('email')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const { setUser, setSession } = useAuthStore()
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm()
+  const { register, handleSubmit, formState: { errors }, watch, reset } = useForm()
+  const password = watch('password', '')
+
+  const passwordStrength = useMemo(() => {
+    const passed = PASSWORD_RULES.filter((r) => r.test(password)).length
+    return { passed, total: PASSWORD_RULES.length, percent: (passed / PASSWORD_RULES.length) * 100 }
+  }, [password])
+
+  const strengthLabel = () => {
+    if (passwordStrength.passed <= 2) return 'Weak'
+    if (passwordStrength.passed <= 3) return 'Fair'
+    if (passwordStrength.passed <= 4) return 'Good'
+    return 'Strong'
+  }
+
+  const strengthColor = () => {
+    if (passwordStrength.passed <= 2) return 'var(--color-danger)'
+    if (passwordStrength.passed <= 3) return 'var(--color-warning)'
+    if (passwordStrength.passed <= 4) return 'var(--color-info)'
+    return 'var(--color-success)'
+  }
 
   const onSubmit = async (data) => {
     setLoading(true)
@@ -44,36 +67,10 @@ export function Auth() {
     }
   }
 
-  const handleMethodChange = (method) => {
-    setLoginMethod(method)
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'register' : 'login')
+    setError('')
     reset()
-  }
-
-  const getIdentifierPlaceholder = () => {
-    switch (loginMethod) {
-      case 'email': return 'Enter your email'
-      case 'username': return 'Enter your username'
-      case 'mobile': return 'Enter your mobile number'
-      default: return 'Enter your email'
-    }
-  }
-
-  const getIdentifierLabel = () => {
-    switch (loginMethod) {
-      case 'email': return 'Email'
-      case 'username': return 'Username'
-      case 'mobile': return 'Mobile Number'
-      default: return 'Email'
-    }
-  }
-
-  const getIdentifierIcon = () => {
-    switch (loginMethod) {
-      case 'email': return Mail
-      case 'username': return AtSign
-      case 'mobile': return Phone
-      default: return Mail
-    }
   }
 
   return (
@@ -130,22 +127,6 @@ export function Auth() {
 
             {error && <div className="auth-error">{error}</div>}
 
-            {mode === 'login' && (
-              <div className="auth-method-tabs">
-                {LOGIN_METHODS.map((method) => (
-                  <button
-                    key={method.id}
-                    className={cn('auth-method-tab', loginMethod === method.id && 'active')}
-                    onClick={() => handleMethodChange(method.id)}
-                    type="button"
-                  >
-                    <method.icon size={16} />
-                    {method.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
               {mode === 'register' && (
                 <>
@@ -164,7 +145,7 @@ export function Auth() {
                     error={errors.email?.message}
                     {...register('email', {
                       required: 'Email is required',
-                      pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' },
+                      pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email address' },
                     })}
                   />
                   <Input
@@ -175,6 +156,7 @@ export function Auth() {
                     {...register('username', {
                       required: 'Username is required',
                       minLength: { value: 3, message: 'Minimum 3 characters' },
+                      maxLength: { value: 20, message: 'Maximum 20 characters' },
                       pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Only letters, numbers, underscore' },
                     })}
                   />
@@ -194,37 +176,85 @@ export function Auth() {
 
               {mode === 'login' && (
                 <Input
-                  label={getIdentifierLabel()}
-                  icon={getIdentifierIcon()}
-                  type={loginMethod === 'email' ? 'email' : 'text'}
-                  placeholder={getIdentifierPlaceholder()}
+                  label="Email, Username or Phone"
+                  icon={Mail}
+                  placeholder="Enter email, username or phone"
                   error={errors.identifier?.message}
                   {...register('identifier', {
-                    required: `${getIdentifierLabel()} is required`,
-                    ...(loginMethod === 'email' && {
-                      pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' },
-                    }),
-                    ...(loginMethod === 'mobile' && {
-                      pattern: { value: /^[+]?[\d\s-]{10,15}$/, message: 'Invalid mobile number' },
-                    }),
-                    ...(loginMethod === 'username' && {
-                      minLength: { value: 3, message: 'Minimum 3 characters' },
-                    }),
+                    required: 'This field is required',
                   })}
                 />
               )}
 
-              <Input
-                label="Password"
-                icon={Lock}
-                type="password"
-                placeholder="Enter your password"
-                error={errors.password?.message}
-                {...register('password', {
-                  required: 'Password is required',
-                  minLength: { value: 6, message: 'Minimum 6 characters' },
-                })}
-              />
+              <div className="password-field">
+                <Input
+                  label="Password"
+                  icon={Lock}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  error={errors.password?.message}
+                  {...register('password', {
+                    required: 'Password is required',
+                    minLength: { value: 8, message: 'Minimum 8 characters' },
+                  })}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {mode === 'register' && password && (
+                <div className="password-strength">
+                  <div className="password-strength-bar">
+                    <div
+                      className="password-strength-fill"
+                      style={{ '--strength-width': `${passwordStrength.percent}%`, '--strength-color': strengthColor() }}
+                    />
+                  </div>
+                  <span className="password-strength-label" style={{ color: strengthColor() }}>
+                    {strengthLabel()}
+                  </span>
+                </div>
+              )}
+
+              {mode === 'register' && (
+                <>
+                  <div className="password-rules">
+                    {PASSWORD_RULES.map((rule) => (
+                      <div key={rule.id} className={cn('password-rule', rule.test(password) && 'passed')}>
+                        {rule.test(password) ? <Check size={12} /> : <X size={12} />}
+                        <span>{rule.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="password-field">
+                    <Input
+                      label="Confirm Password"
+                      icon={Lock}
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Confirm your password"
+                      error={errors.confirmPassword?.message}
+                      {...register('confirmPassword', {
+                        required: 'Please confirm your password',
+                        validate: (value) => value === password || 'Passwords do not match',
+                      })}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </>
+              )}
 
               <Button variant="primary" size="lg" className="auth-submit" disabled={loading}>
                 {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
@@ -234,9 +264,9 @@ export function Auth() {
 
             <div className="auth-switch">
               {mode === 'login' ? (
-                <p>Don't have an account? <button onClick={() => setMode('register')}>Sign up</button></p>
+                <p>Don't have an account? <button onClick={switchMode}>Sign up</button></p>
               ) : (
-                <p>Already have an account? <button onClick={() => setMode('login')}>Sign in</button></p>
+                <p>Already have an account? <button onClick={switchMode}>Sign in</button></p>
               )}
             </div>
           </Card>

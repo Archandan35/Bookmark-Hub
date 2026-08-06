@@ -4,25 +4,15 @@ import {
   Play, Pause, SkipBack, SkipForward, Volume2, Maximize,
 } from 'lucide-react'
 import { useAppStore } from '../hooks/useStore'
+import { useFileSystem } from '../hooks/useFileSystem'
 import { Button } from '../components/Button'
-import { cn } from '../utils/helpers'
+import { cn, formatFileSize } from '../utils/helpers'
 
 export function BottomDock() {
   const { bottomDockOpen, setBottomDockOpen } = useAppStore()
+  const { files, folderName, loading, isSupported, requestPermission, refresh, error } = useFileSystem()
   const [viewMode, setViewMode] = useState('list')
   const [selectedFile, setSelectedFile] = useState(null)
-
-  const files = [
-    { name: 'Introduction.mp4', type: 'video', size: '45 MB', modified: '2 days ago' },
-    { name: 'Components.mp4', type: 'video', size: '62 MB', modified: '2 days ago' },
-    { name: 'Hooks.mp4', type: 'video', size: '38 MB', modified: '3 days ago' },
-    { name: 'Cheatsheet.pdf', type: 'pdf', size: '2 MB', modified: '1 week ago' },
-    { name: 'README.md', type: 'markdown', size: '4 KB', modified: '1 week ago' },
-    { name: 'package.json', type: 'code', size: '1 KB', modified: '2 weeks ago' },
-    { name: 'index.html', type: 'code', size: '3 KB', modified: '2 weeks ago' },
-  ]
-
-  const folders = ['Videos', 'Docs', 'Projects', 'Notes']
 
   if (!bottomDockOpen) {
     return (
@@ -37,10 +27,19 @@ export function BottomDock() {
     <div className="bottom-dock">
       <div className="bottom-dock-left">
         <div className="file-explorer-header">
-          <h4 className="file-explorer-title">React Course</h4>
-          <p className="file-explorer-breadcrumb">D:\Study\React</p>
+          <h4 className="file-explorer-title">{folderName || 'File Explorer'}</h4>
+          <p className="file-explorer-breadcrumb">
+            {folderName ? `📁 ${folderName}` : 'No folder selected'}
+          </p>
           <div className="file-explorer-toolbar">
-            <Button variant="ghost" size="sm">New Folder</Button>
+            {isSupported && (
+              <Button variant="ghost" size="sm" onClick={requestPermission}>
+                <FolderOpen size={14} /> Open Folder
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={!folderName}>
+              <RefreshCw size={14} />
+            </Button>
             <button
               className={cn('view-toggle-btn', viewMode === 'grid' && 'active')}
               onClick={() => setViewMode('grid')}
@@ -54,47 +53,44 @@ export function BottomDock() {
               <List size={14} />
             </button>
             <button className="view-toggle-btn">
-              <RefreshCw size={14} />
-            </button>
-            <button className="view-toggle-btn">
               <MoreHorizontal size={14} />
             </button>
           </div>
         </div>
         <div className="file-explorer-content">
-          <div className="file-explorer-folders">
-            {folders.map((f) => (
-              <div key={f} className="file-explorer-folder">
-                <FolderOpen size={14} /> {f}
-              </div>
-            ))}
-          </div>
-          <div className="file-explorer-files">
-            <div className="file-explorer-row header">
-              <span>Name</span>
-              <span>Type</span>
-              <span>Size</span>
-              <span>Modified</span>
+          {error && <div className="file-explorer-error">{error}</div>}
+          {loading ? (
+            <div className="file-explorer-loading">Loading...</div>
+          ) : files.length === 0 ? (
+            <div className="file-explorer-empty">
+              {isSupported ? (
+                <p>Click "Open Folder" to browse local files</p>
+              ) : (
+                <p>File System Access API not supported in this browser</p>
+              )}
             </div>
-            {files.map((file) => (
-              <div
-                key={file.name}
-                className={cn('file-explorer-row', selectedFile === file.name && 'selected')}
-                onClick={() => setSelectedFile(file.name)}
-              >
-                <span className="file-explorer-name">
-                  {file.type === 'video' && '🎬'}
-                  {file.type === 'pdf' && '📄'}
-                  {file.type === 'markdown' && '📝'}
-                  {file.type === 'code' && '💻'}
-                  {' '}{file.name}
-                </span>
-                <span>{file.type}</span>
-                <span>{file.size}</span>
-                <span>{file.modified}</span>
+          ) : (
+            <div className="file-explorer-files">
+              <div className="file-explorer-row header">
+                <span>Name</span>
+                <span>Type</span>
+                <span>Size</span>
               </div>
-            ))}
-          </div>
+              {files.map((file) => (
+                <div
+                  key={file.name}
+                  className={cn('file-explorer-row', selectedFile?.name === file.name && 'selected')}
+                  onClick={() => setSelectedFile(file)}
+                >
+                  <span className="file-explorer-name">
+                    {file.kind === 'directory' ? '📁' : '📄'} {file.name}
+                  </span>
+                  <span>{file.kind}</span>
+                  <span>{file.size ? formatFileSize(file.size) : '--'}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="bottom-dock-right">
@@ -104,7 +100,7 @@ export function BottomDock() {
               <div className="media-viewer-content">
                 <div className="media-viewer-placeholder">
                   <Play size={48} />
-                  <p>{selectedFile}</p>
+                  <p>{selectedFile.name}</p>
                 </div>
               </div>
               <div className="media-viewer-controls">
@@ -113,7 +109,7 @@ export function BottomDock() {
                   <div className="media-viewer-progress-bar">
                     <div className="media-viewer-progress-fill" style={{ '--progress-width': '0%' }} />
                   </div>
-                  <span>05:32</span>
+                  <span>00:00</span>
                 </div>
                 <div className="media-viewer-buttons">
                   <button className="media-viewer-btn">
