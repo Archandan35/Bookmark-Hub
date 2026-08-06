@@ -3853,16 +3853,16 @@ img {
 }
 
 .auth-title {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--color-text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .auth-subtitle {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--color-text-secondary);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .password-field {
@@ -3954,18 +3954,19 @@ img {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .auth-submit {
   width: 100%;
   margin-top: 8px;
+  font-size: 16px;
 }
 
 .auth-switch {
   text-align: center;
-  margin-top: 20px;
-  font-size: 14px;
+  margin-top: 24px;
+  font-size: 16px;
   color: var(--color-text-secondary);
 }
 
@@ -4170,7 +4171,7 @@ img {
     padding: 12px;
   }
   .auth-form {
-    gap: 12px;
+    gap: 16px;
   }
 }
 

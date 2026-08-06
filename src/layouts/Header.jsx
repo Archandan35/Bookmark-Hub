@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Plus, Bell, Settings, Moon, Sun, LogOut, User, Crown,
+  Plus, Bell, Settings, Moon, Sun, LogOut, User, Star,
 } from 'lucide-react'
 import { Button } from '../components/Button'
 import { SearchBar } from '../components/SearchBar'
@@ -95,7 +95,7 @@ export function Header() {
               <div className="header-user">
                 <Avatar name={user?.email || 'User'} size="sm" />
                 <span className="header-username">{user?.email?.split('@')[0] || 'User'}</span>
-                <Crown size={14} className="header-premium" />
+                <Star size={14} className="header-premium" />
               </div>
             }
             items={userMenu}
