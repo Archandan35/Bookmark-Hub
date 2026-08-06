@@ -340,6 +340,8 @@ ALTER TABLE public.media_progress ENABLE ROW LEVEL SECURITY;
 -- Users policies
 DROP POLICY IF EXISTS users_select_own ON public.users;
 CREATE POLICY users_select_own ON public.users FOR SELECT USING (id = auth.uid());
+DROP POLICY IF EXISTS users_insert_own ON public.users;
+CREATE POLICY users_insert_own ON public.users FOR INSERT WITH CHECK (id = auth.uid());
 DROP POLICY IF EXISTS users_update_own ON public.users;
 CREATE POLICY users_update_own ON public.users FOR UPDATE USING (id = auth.uid());
 DROP POLICY IF EXISTS users_admin_all ON public.users;

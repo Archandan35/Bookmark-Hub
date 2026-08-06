@@ -53,17 +53,16 @@ export function Auth() {
     setLoading(true)
     setError('')
     try {
-      let result
       if (mode === 'login') {
-        result = await AuthService.signIn(data.identifier, data.password)
-        if (result?.data) {
-          setUser(result.data.user)
-          setSession(result.data.session)
+        const { user, session } = await AuthService.signIn(data.identifier, data.password)
+        if (user) {
+          setUser(user)
+          setSession(session)
           addToast('Welcome back!', 'success')
         }
       } else {
-        result = await AuthService.signUp(data.email, data.password, data.name, data.username, data.mobile)
-        if (result?.data) {
+        const { user } = await AuthService.signUp(data.email, data.password, data.name, data.username, data.mobile)
+        if (user) {
           addToast('Account created! You can now sign in.', 'success')
           setMode('login')
           reset()

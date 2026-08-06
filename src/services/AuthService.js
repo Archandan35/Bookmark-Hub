@@ -1,5 +1,15 @@
 import databaseProvider from '../providers/DatabaseProvider'
 
+function normalizeAuthResult(result) {
+  if (result?.data) {
+    return { user: result.data.user, session: result.data.session ?? null }
+  }
+  if (result?.user) {
+    return { user: result.user, session: result.session ?? null }
+  }
+  return { user: null, session: null }
+}
+
 export const AuthService = {
   async signUp(email, password, name, username, mobile) {
     const result = await databaseProvider.signUp(email, password, {
@@ -8,10 +18,12 @@ export const AuthService = {
       mobile,
     })
 
-    if (databaseProvider.isConfigured && result?.data?.user) {
+    const { user } = normalizeAuthResult(result)
+
+    if (databaseProvider.isConfigured && user) {
       try {
         await databaseProvider.from('users').upsert({
-          id: result.data.user.id,
+          id: user.id,
           email,
           username: username || email.split('@')[0],
           name: name || '',
@@ -21,12 +33,12 @@ export const AuthService = {
       }
     }
 
-    return result
+    return { user, session: null }
   },
 
   async signIn(identifier, password) {
     const result = await databaseProvider.signIn(identifier, password)
-    return result
+    return normalizeAuthResult(result)
   },
 
   async signOut() {
