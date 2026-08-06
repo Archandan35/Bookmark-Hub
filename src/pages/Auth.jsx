@@ -63,7 +63,20 @@ export function Auth() {
       }
     } catch (err) {
       secureLog('error', 'Authentication failed', { error: err.message })
-      setError('Authentication failed. Please check your credentials.')
+      const msg = err.message || 'Authentication failed.'
+      if (msg.includes('Email confirm') || msg.includes('confirm')) {
+        setError('Please confirm your email before signing in.')
+      } else if (msg.includes('Invalid login') || msg.includes('Invalid credentials')) {
+        setError('Invalid email/username or password.')
+      } else if (msg.includes('already registered') || msg.includes('already exists')) {
+        setError('An account with this email already exists.')
+      } else if (msg.includes('Password should be at least')) {
+        setError('Password does not meet requirements.')
+      } else if (msg.includes('Supabase credentials not configured')) {
+        setError('Demo mode: Supabase not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
+      } else {
+        setError(msg.length > 100 ? 'Authentication failed. Please try again.' : msg)
+      }
     } finally {
       setLoading(false)
     }
