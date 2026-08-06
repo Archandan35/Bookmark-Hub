@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { router } from './routes'
@@ -6,6 +6,8 @@ import { useAuthStore } from './hooks/useStore'
 import { AuthService } from './services/AuthService'
 import { useAppStore } from './hooks/useStore'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { ToastProvider } from './components/Toast'
+import { Skeleton } from './components/Skeleton'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,8 +18,17 @@ const queryClient = new QueryClient({
   },
 })
 
+function AppLoader() {
+  return (
+    <div className="app-loader">
+      <div className="app-loader-logo">📚</div>
+      <Skeleton className="app-loader-bar" />
+    </div>
+  )
+}
+
 export default function App() {
-  const { setInitialized, setUser, setSession, user } = useAuthStore()
+  const { setInitialized, setUser, setSession } = useAuthStore()
   const { theme } = useAppStore()
 
   useEffect(() => {
@@ -48,7 +59,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
-        <RouterProvider router={router} />
+        <ToastProvider>
+          <Suspense fallback={<AppLoader />}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </ToastProvider>
       </ErrorBoundary>
     </QueryClientProvider>
   )
