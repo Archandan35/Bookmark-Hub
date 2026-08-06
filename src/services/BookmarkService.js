@@ -1,5 +1,6 @@
 import { BookmarkRepository } from '../repositories/BookmarkRepository'
 import { generateId } from '../utils/helpers'
+import { sanitizeInput, sanitizeObject } from '../utils/security'
 
 export const BookmarkService = {
   async getAll(userId) {
@@ -18,13 +19,13 @@ export const BookmarkService = {
     const bookmark = {
       id: generateId(),
       user_id: userId,
-      title: data.title,
-      description: data.description || '',
-      url: data.url || '',
+      title: sanitizeInput(data.title),
+      description: sanitizeInput(data.description || ''),
+      url: sanitizeInput(data.url || ''),
       type: data.type || 'website',
       collection_id: data.collection_id || null,
-      thumbnail: data.thumbnail || '',
-      tags: data.tags || [],
+      thumbnail: sanitizeInput(data.thumbnail || ''),
+      tags: (data.tags || []).map((t) => sanitizeInput(t)),
       is_favorite: data.is_favorite || false,
       is_pinned: data.is_pinned || false,
       progress: 0,
@@ -38,7 +39,8 @@ export const BookmarkService = {
   },
 
   async update(id, updates) {
-    return BookmarkRepository.update(id, updates)
+    const sanitized = sanitizeObject(updates)
+    return BookmarkRepository.update(id, sanitized)
   },
 
   async delete(id) {
@@ -54,7 +56,7 @@ export const BookmarkService = {
   },
 
   async search(userId, query) {
-    return BookmarkRepository.search(userId, query)
+    return BookmarkRepository.search(userId, sanitizeInput(query))
   },
 
   async getFavorites(userId) {
