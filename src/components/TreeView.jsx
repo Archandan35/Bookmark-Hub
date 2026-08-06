@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { ChevronRight, ChevronDown, GripVertical } from 'lucide-react'
 import { cn } from '../utils/helpers'
 
-export function TreeNode({ node, level = 0, onSelect, selectedId, onDragStart, onDragOver, onDragEnd, onDrop, dragOverId }) {
-  const [expanded, setExpanded] = useState(false)
-  const hasChildren = node.children && node.children.children?.length > 0
+export function TreeNode({ node, level = 0, onSelect, selectedId, onDragStart, onDragOver, onDragEnd, onDrop, dragOverId, draggedItem }) {
+  const [expanded, setExpanded] = useState(level < 1)
+  const hasChildren = node.children && node.children.length > 0
 
   return (
     <div className="tree-node">
@@ -45,9 +45,9 @@ export function TreeNode({ node, level = 0, onSelect, selectedId, onDragStart, o
         <span className="tree-node-label">{node.name}</span>
         {node.count !== undefined && <span className="tree-node-count">{node.count}</span>}
       </div>
-      {expanded && node.children && (
+      {expanded && hasChildren && (
         <div className="tree-node-children">
-          {node.children.children?.map((child) => (
+          {node.children.map((child) => (
             <TreeNode
               key={child.id}
               node={child}
@@ -59,6 +59,7 @@ export function TreeNode({ node, level = 0, onSelect, selectedId, onDragStart, o
               onDragEnd={onDragEnd}
               onDrop={onDrop}
               dragOverId={dragOverId}
+              draggedItem={draggedItem}
             />
           ))}
         </div>
@@ -112,6 +113,7 @@ export function TreeView({ data, onSelect, selectedId, onReorder }) {
           onDragEnd={handleDragEnd}
           onDrop={handleDrop}
           dragOverId={dragOverId}
+          draggedItem={draggedItem}
         />
       ))}
     </div>

@@ -3,7 +3,8 @@ import { Modal } from './Modal'
 import { Input, Select, Textarea } from './Input'
 import { Button } from './Button'
 import { BOOKMARK_TYPES, BOOKMARK_TYPE_CONFIG } from '../constants'
-import { X } from 'lucide-react'
+import { X, Image, Link } from 'lucide-react'
+import { useState } from 'react'
 
 export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, onDelete }) {
   const isEdit = !!bookmark
@@ -15,10 +16,13 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
       url: bookmark?.url || '',
       type: bookmark?.type || 'website',
       collection_id: bookmark?.collection_id || '',
+      thumbnail: bookmark?.thumbnail || '',
     },
   })
 
   const selectedType = watch('type')
+  const url = watch('url')
+  const [thumbnailPreview, setThumbnailPreview] = useState(bookmark?.thumbnail || '')
 
   const typeOptions = Object.entries(BOOKMARK_TYPE_CONFIG).map(([value, config]) => ({
     value,
@@ -31,14 +35,31 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
   ]
 
   const onSubmit = (data) => {
-    onSave?.(data)
+    const processedData = {
+      ...data,
+      collection_id: data.collection_id || null,
+      thumbnail: data.thumbnail || thumbnailPreview || '',
+    }
+    onSave?.(processedData)
     onClose()
     reset()
+    setThumbnailPreview('')
   }
 
   const handleDelete = () => {
     onDelete?.(bookmark)
     onClose()
+  }
+
+  const fetchThumbnail = () => {
+    if (url) {
+      try {
+        const domain = new URL(url).origin
+        setThumbnailPreview(`${domain}/favicon.ico`)
+      } catch {
+        setThumbnailPreview('')
+      }
+    }
   }
 
   return (
@@ -56,14 +77,14 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
           )}
           <div className="modal-footer-right">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit(onSubmit)}>
+            <Button variant="primary" type="submit" form="bookmark-form">
               {isEdit ? 'Update' : 'Add Bookmark'}
             </Button>
           </div>
         </div>
       }
     >
-      <div className="bookmark-form">
+      <form id="bookmark-form" onSubmit={handleSubmit(onSubmit)} className="bookmark-form">
         <div className="bookmark-form-type-selector">
           {Object.entries(BOOKMARK_TYPE_CONFIG).map(([type, config]) => (
             <button
@@ -92,20 +113,50 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
         />
 
         {(selectedType === BOOKMARK_TYPES.WEBSITE || selectedType === BOOKMARK_TYPES.VIDEO || selectedType === BOOKMARK_TYPES.AUDIO || selectedType === BOOKMARK_TYPES.PDF) && (
-          <Input
-            label="URL"
-            placeholder="https://..."
-            error={errors.url?.message}
-            {...register('url')}
-          />
+          <div className="input-group">
+            <div className="input-with-fetch">
+              <Input
+                label="URL"
+                placeholder="https://..."
+                error={errors.url?.message}
+                {...register('url')}
+              />
+              {url && (
+                <button type="button" className="fetch-thumbnail-btn" onClick={fetchThumbnail} aria-label="Fetch thumbnail">
+                  <Link size={14} />
+                </button>
+              )}
+            </div>
+          </div>
         )}
+
+        <div className="thumbnail-section">
+          <label className="input-label">Thumbnail</label>
+          <div className="thumbnail-input-row">
+            <input
+              type="text"
+              className="input thumbnail-input"
+              placeholder="Paste image URL or fetch from link"
+              {...register('thumbnail')}
+            />
+            {thumbnailPreview || watch('thumbnail') ? (
+              <div className="thumbnail-preview">
+                <img src={thumbnailPreview || watch('thumbnail')} alt="Thumbnail" />
+              </div>
+            ) : (
+              <div className="thumbnail-placeholder">
+                <Image size={24} />
+              </div>
+            )}
+          </div>
+        </div>
 
         <Select
           label="Collection"
           options={collectionOptions}
           {...register('collection_id')}
         />
-      </div>
+      </form>
     </Modal>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, ZoomIn, ZoomOut, RotateCw, Download, Maximize, Minimize } from 'lucide-react'
+import { X, ZoomIn, ZoomOut, RotateCw, Download, Maximize, Minimize, FileText } from 'lucide-react'
 import { Button } from './Button'
 
 export function Viewer({ file, onClose }) {
@@ -13,10 +13,13 @@ export function Viewer({ file, onClose }) {
 
   if (!file) return null
 
+  const isImage = file.type === 'image' || file.type?.startsWith('image/')
+  const isPdf = file.type === 'pdf' || file.url?.endsWith('.pdf')
+
   return (
     <div className={`viewer ${fullscreen ? 'viewer-fullscreen' : ''}`}>
       <div className="viewer-toolbar">
-        <span className="viewer-filename">{file.name}</span>
+        <span className="viewer-filename">{file.title || file.name}</span>
         <div className="viewer-actions">
           <Button variant="ghost" size="icon" onClick={handleZoomOut} aria-label="Zoom out">
             <ZoomOut size={18} />
@@ -25,15 +28,21 @@ export function Viewer({ file, onClose }) {
           <Button variant="ghost" size="icon" onClick={handleZoomIn} aria-label="Zoom in">
             <ZoomIn size={18} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleRotate} aria-label="Rotate">
-            <RotateCw size={18} />
-          </Button>
+          {isImage && (
+            <Button variant="ghost" size="icon" onClick={handleRotate} aria-label="Rotate">
+              <RotateCw size={18} />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={() => setFullscreen(!fullscreen)} aria-label="Toggle fullscreen">
             {fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Download">
-            <Download size={18} />
-          </Button>
+          {file.url && (
+            <a href={file.url} download target="_blank" rel="noopener noreferrer">
+              <Button variant="ghost" size="icon" aria-label="Download">
+                <Download size={18} />
+              </Button>
+            </a>
+          )}
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close viewer">
             <X size={18} />
           </Button>
@@ -44,12 +53,28 @@ export function Viewer({ file, onClose }) {
           className="viewer-preview"
           style={{ transform: `scale(${zoom / 100}) rotate(${rotation}deg)` }}
         >
-          {file.type?.startsWith('image/') ? (
-            <img src={file.url} alt={file.name} />
+          {isImage ? (
+            <img src={file.url} alt={file.title || file.name} />
+          ) : isPdf ? (
+            <div className="viewer-pdf">
+              <iframe
+                src={file.url}
+                title={file.title || file.name}
+                width="100%"
+                height="100%"
+                style={{ border: 'none', minHeight: '500px' }}
+              />
+            </div>
           ) : (
             <div className="viewer-placeholder">
+              <FileText size={48} />
               <p>Preview not available</p>
-              <p className="viewer-placeholder-name">{file.name}</p>
+              <p className="viewer-placeholder-name">{file.title || file.name}</p>
+              {file.url && (
+                <a href={file.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm" style={{ marginTop: '16px' }}>
+                  Open File
+                </a>
+              )}
             </div>
           )}
         </div>

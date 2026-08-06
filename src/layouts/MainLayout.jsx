@@ -11,7 +11,7 @@ export function MainLayout() {
 
   return (
     <div className="app-layout">
-      <Header />
+      <Header sidebarCollapsed={sidebarCollapsed} />
       <div className="app-body">
         <Sidebar />
         <main className={`main-content ${sidebarCollapsed && 'sidebar-collapsed'} ${rightPanelOpen && 'with-right-panel'} ${bottomDockOpen && 'with-bottom-dock'}`}>

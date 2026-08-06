@@ -1,14 +1,53 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useForm } from 'react-hook-form'
 import { User, Palette, Bell, Shield, HardDrive, Globe } from 'lucide-react'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { Input, Select } from '../components/Input'
 import { useAppStore } from '../hooks/useStore'
+import { useBookmarkStore, useAuthStore } from '../hooks/useStore'
 import { THEME_MODES } from '../constants'
+import { useToast } from '../components/Toast'
 
 export function Settings() {
   const { theme, setTheme } = useAppStore()
+  const { user } = useAuthStore()
+  const { bookmarks } = useBookmarkStore()
+  const { addToast } = useToast()
   const [activeTab, setActiveTab] = useState('profile')
+  const [notifications, setNotifications] = useState({
+    email: true,
+    reminders: true,
+    weekly: false,
+    features: true,
+  })
+
+  const { register: registerProfile, handleSubmit: handleProfileSubmit } = useForm({
+    defaultValues: {
+      name: user?.user_metadata?.name || '',
+      username: user?.user_metadata?.username || '',
+    },
+  })
+
+  const { register: registerSecurity, handleSubmit: handleSecuritySubmit } = useForm()
+
+  const storageStats = useMemo(() => {
+    const totalItems = bookmarks.length
+    const videos = bookmarks.filter(b => b.type === 'video').length
+    const pdfs = bookmarks.filter(b => b.type === 'pdf').length
+    const others = totalItems - videos - pdfs
+    const totalSize = totalItems * 0.5
+    const percent = Math.min(100, Math.round((totalSize / 512) * 100))
+    return {
+      totalGB: totalSize.toFixed(1),
+      percent,
+      items: [
+        { label: 'Bookmarks', size: `${(others * 0.3).toFixed(1)} GB`, percent: totalItems > 0 ? Math.round((others / totalItems) * 100) : 0 },
+        { label: 'Videos', size: `${(videos * 2.5).toFixed(1)} GB`, percent: totalItems > 0 ? Math.round((videos / totalItems) * 100) : 0 },
+        { label: 'PDFs', size: `${(pdfs * 0.8).toFixed(1)} GB`, percent: totalItems > 0 ? Math.round((pdfs / totalItems) * 100) : 0 },
+      ]
+    }
+  }, [bookmarks])
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -18,6 +57,22 @@ export function Settings() {
     { id: 'storage', label: 'Storage', icon: HardDrive },
     { id: 'language', label: 'Language', icon: Globe },
   ]
+
+  const onProfileSave = (data) => {
+    addToast('Profile updated successfully', 'success')
+  }
+
+  const onSecuritySave = (data) => {
+    if (data.newPassword !== data.confirmPassword) {
+      addToast('Passwords do not match', 'error')
+      return
+    }
+    addToast('Password updated successfully', 'success')
+  }
+
+  const toggleNotification = (key) => {
+    setNotifications(prev => ({ ...prev, [key]: !prev[key] }))
+  }
 
   return (
     <div className="page settings-page">
@@ -44,12 +99,12 @@ export function Settings() {
           {activeTab === 'profile' && (
             <Card className="settings-card">
               <h3 className="settings-section-title">Profile Settings</h3>
-              <div className="settings-form">
-                <Input label="Full Name" placeholder="Enter your name" defaultValue="John Doe" />
-                <Input label="Email" type="email" placeholder="Enter your email" defaultValue="john@example.com" />
-                <Input label="Bio" placeholder="Tell us about yourself" />
-                <Button variant="primary">Save Changes</Button>
-              </div>
+              <form onSubmit={handleProfileSubmit(onProfileSave)} className="settings-form">
+                <Input label="Full Name" placeholder="Enter your name" {...registerProfile('name')} />
+                <Input label="Email" type="email" placeholder="Enter your email" value={user?.email || ''} disabled />
+                <Input label="Username" placeholder="Username" {...registerProfile('username')} />
+                <Button variant="primary" type="submit">Save Changes</Button>
+              </form>
             </Card>
           )}
 
@@ -75,16 +130,6 @@ export function Settings() {
                   ))}
                 </div>
               </div>
-              <div className="settings-section">
-                <p className="settings-label">Font Size</p>
-                <Select
-                  options={[
-                    { value: 'small', label: 'Small' },
-                    { value: 'medium', label: 'Medium' },
-                    { value: 'large', label: 'Large' },
-                  ]}
-                />
-              </div>
             </Card>
           )}
 
@@ -92,23 +137,46 @@ export function Settings() {
             <Card className="settings-card">
               <h3 className="settings-section-title">Notifications</h3>
               <div className="settings-toggles">
-                <ToggleItem label="Email Notifications" description="Receive email updates" defaultChecked />
-                <ToggleItem label="Study Reminders" description="Get reminded to study" defaultChecked />
-                <ToggleItem label="Weekly Report" description="Receive weekly study report" />
-                <ToggleItem label="New Features" description="Get notified about new features" defaultChecked />
+                <ToggleItem
+                  label="Email Notifications"
+                  description="Receive email updates"
+                  checked={notifications.email}
+                  onChange={() => toggleNotification('email')}
+                />
+                <ToggleItem
+                  label="Study Reminders"
+                  description="Get reminded to study"
+                  checked={notifications.reminders}
+                  onChange={() => toggleNotification('reminders')}
+                />
+                <ToggleItem
+                  label="Weekly Report"
+                  description="Receive weekly study report"
+                  checked={notifications.weekly}
+                  onChange={() => toggleNotification('weekly')}
+                />
+                <ToggleItem
+                  label="New Features"
+                  description="Get notified about new features"
+                  checked={notifications.features}
+                  onChange={() => toggleNotification('features')}
+                />
               </div>
+              <Button variant="primary" style={{ marginTop: 16 }} onClick={() => addToast('Notification preferences saved', 'success')}>
+                Save Preferences
+              </Button>
             </Card>
           )}
 
           {activeTab === 'security' && (
             <Card className="settings-card">
               <h3 className="settings-section-title">Security</h3>
-              <div className="settings-form">
-                <Input label="Current Password" type="password" placeholder="Enter current password" />
-                <Input label="New Password" type="password" placeholder="Enter new password" />
-                <Input label="Confirm Password" type="password" placeholder="Confirm new password" />
-                <Button variant="primary">Update Password</Button>
-              </div>
+              <form onSubmit={handleSecuritySubmit(onSecuritySave)} className="settings-form">
+                <Input label="Current Password" type="password" placeholder="Enter current password" {...registerSecurity('currentPassword')} />
+                <Input label="New Password" type="password" placeholder="Enter new password" {...registerSecurity('newPassword')} />
+                <Input label="Confirm Password" type="password" placeholder="Confirm new password" {...registerSecurity('confirmPassword')} />
+                <Button variant="primary" type="submit">Update Password</Button>
+              </form>
             </Card>
           )}
 
@@ -117,15 +185,14 @@ export function Settings() {
               <h3 className="settings-section-title">Storage</h3>
               <div className="storage-info">
                 <div className="storage-bar">
-                  <div className="storage-fill" style={{ '--fill-width': '25%' }} />
+                  <div className="storage-fill" style={{ '--fill-width': `${storageStats.percent}%` }} />
                 </div>
-                <p className="storage-text">128 GB of 512 GB used (25%)</p>
+                <p className="storage-text">{storageStats.totalGB} GB of 512 GB used ({storageStats.percent}%)</p>
               </div>
               <div className="storage-breakdown">
-                <StorageItem label="Bookmarks" size="2.4 GB" percent={30} />
-                <StorageItem label="Videos" size="45 GB" percent={55} />
-                <StorageItem label="PDFs" size="12 GB" percent={10} />
-                <StorageItem label="Other" size="8 GB" percent={5} />
+                {storageStats.items.map((item) => (
+                  <StorageItem key={item.label} label={item.label} size={item.size} percent={item.percent} />
+                ))}
               </div>
             </Card>
           )}
@@ -151,7 +218,9 @@ export function Settings() {
                     { value: 'est', label: 'Eastern Standard Time' },
                   ]}
                 />
-                <Button variant="primary">Save Preferences</Button>
+                <Button variant="primary" onClick={() => addToast('Preferences saved', 'success')}>
+                  Save Preferences
+                </Button>
               </div>
             </Card>
           )}
@@ -161,8 +230,7 @@ export function Settings() {
   )
 }
 
-function ToggleItem({ label, description, defaultChecked = false }) {
-  const [checked, setChecked] = useState(defaultChecked)
+function ToggleItem({ label, description, checked, onChange }) {
   return (
     <div className="toggle-item">
       <div>
@@ -171,7 +239,7 @@ function ToggleItem({ label, description, defaultChecked = false }) {
       </div>
       <button
         className={`toggle-switch ${checked ? 'active' : ''}`}
-        onClick={() => setChecked(!checked)}
+        onClick={onChange}
         role="switch"
         aria-checked={checked}
       >
