@@ -34,7 +34,15 @@ function PageWrapper({ children }) {
 }
 
 function ProtectedRoute({ children }) {
-  const { user } = useAuthStore()
+  const { user, initialized } = useAuthStore()
+  if (!initialized) {
+    return (
+      <div className="app-loader">
+        <div className="app-loader-logo">📚</div>
+        <Skeleton className="app-loader-bar" />
+      </div>
+    )
+  }
   if (!user) return <Auth />
   return children
 }

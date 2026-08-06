@@ -56,6 +56,19 @@ export default function App() {
       }
     }
     init()
+
+    if (isSupabaseConfigured()) {
+      const { data: { subscription } } = AuthService.onAuthStateChange((event, session) => {
+        if (session) {
+          setSession(session)
+          setUser(session.user)
+        } else {
+          setSession(null)
+          setUser(null)
+        }
+      })
+      return () => subscription?.unsubscribe()
+    }
   }, [setInitialized, setUser, setSession])
 
   useEffect(() => {
