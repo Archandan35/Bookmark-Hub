@@ -7,6 +7,20 @@ export const AuthService = {
       username,
       mobile,
     })
+
+    if (databaseProvider.isConfigured && result?.data?.user) {
+      try {
+        await databaseProvider.from('users').upsert({
+          id: result.data.user.id,
+          email,
+          username: username || email.split('@')[0],
+          name: name || '',
+        }, { onConflict: 'id' })
+      } catch (err) {
+        // Non-critical: trigger may have already created the record
+      }
+    }
+
     return result
   },
 

@@ -200,7 +200,20 @@ async function ping() {
     }
   }
 
-  return getStatus();
+  return {
+    initialized,
+    lastPingAt,
+    lastPingStatus,
+    lastPingError,
+    consecutiveFailures,
+    totalPings,
+    successfulPings,
+    uptime: totalPings > 0 ? Math.round((successfulPings / totalPings) * 100) : 0,
+    intervalMs: FIVE_DAYS_MS,
+    nextPingAt: initialized && lastPingAt
+      ? new Date(new Date(lastPingAt).getTime() + FIVE_DAYS_MS).toISOString()
+      : null,
+  };
 }
 
 function handleVisibilityChange() {

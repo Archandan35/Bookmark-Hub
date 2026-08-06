@@ -10,7 +10,7 @@ const API_CACHE_PATTERNS = [
 
 const EXCLUDED_PATTERNS = [
   /\/auth\//,
-  /\/rest\/v1\/rpc\/,
+  /\/rest\/v1\/rpc\//,
 ]
 
 self.addEventListener('install', (event) => {

@@ -7,6 +7,7 @@ import { Card } from '../components/Card'
 import { AuthService } from '../services/AuthService'
 import { useAuthStore } from '../hooks/useStore'
 import { secureLog } from '../utils/security'
+import { useToast } from '../components/Toast'
 import { cn } from '../utils/helpers'
 
 const PASSWORD_RULES = [
@@ -26,6 +27,7 @@ export function Auth() {
   const { setUser, setSession } = useAuthStore()
 
   const { register, handleSubmit, formState: { errors }, watch, reset } = useForm()
+  const { addToast } = useToast()
   const password = watch('password', '')
 
   const passwordStrength = useMemo(() => {
@@ -54,12 +56,18 @@ export function Auth() {
       let result
       if (mode === 'login') {
         result = await AuthService.signIn(data.identifier, data.password)
+        if (result?.data) {
+          setUser(result.data.user)
+          setSession(result.data.session)
+          addToast('Welcome back!', 'success')
+        }
       } else {
         result = await AuthService.signUp(data.email, data.password, data.name, data.username, data.mobile)
-      }
-      if (result?.data) {
-        setUser(result.data.user)
-        setSession(result.data.session)
+        if (result?.data) {
+          addToast('Account created! You can now sign in.', 'success')
+          setMode('login')
+          reset()
+        }
       }
     } catch (err) {
       secureLog('error', 'Authentication failed', { error: err.message })
@@ -207,6 +215,7 @@ export function Auth() {
                   icon={Lock}
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   error={errors.password?.message}
                   {...register('password', {
                     required: 'Password is required',
@@ -253,6 +262,7 @@ export function Auth() {
                       icon={Lock}
                       type={showConfirmPassword ? 'text' : 'password'}
                       placeholder="Confirm your password"
+                      autoComplete="new-password"
                       error={errors.confirmPassword?.message}
                       {...register('confirmPassword', {
                         required: 'Please confirm your password',

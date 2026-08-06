@@ -239,6 +239,9 @@ BEGIN
     ON CONFLICT (user_id) DO NOTHING;
 
     RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -379,6 +382,13 @@ CREATE POLICY activity_logs_owner ON public.activity_logs FOR ALL USING (user_id
 -- Media progress policies
 DROP POLICY IF EXISTS media_progress_owner ON public.media_progress;
 CREATE POLICY media_progress_owner ON public.media_progress FOR ALL USING (user_id = auth.uid());
+
+-- Keepalive log policies
+ALTER TABLE public.keepalive_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS keepalive_log_insert ON public.keepalive_log;
+CREATE POLICY keepalive_log_insert ON public.keepalive_log FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS keepalive_log_select ON public.keepalive_log;
+CREATE POLICY keepalive_log_select ON public.keepalive_log FOR SELECT USING (true);
 
 -- ============================================
 -- 11. KEEPALIVE LOG TABLE
