@@ -6,11 +6,17 @@ import { Button } from '../components/Button'
 import { Tabs } from '../components/Tabs'
 import { Dropdown } from '../components/Dropdown'
 import { Pagination } from '../components/Pagination'
+import { ImportExport } from '../components/ImportExport'
 import { useAppStore } from '../hooks/useStore'
 import { useBookmarkStore, useAuthStore } from '../hooks/useStore'
 import { SORT_OPTIONS } from '../constants'
 import { Bookmark, Grid3X3, List } from 'lucide-react'
 import { BookmarkService } from '../services/BookmarkService'
+import { useToast } from '../components/Toast'
+import { Viewer } from '../components/Viewer'
+import { Player } from '../components/Player'
+import { VirtualGrid } from '../components/VirtualGrid'
+import { BOOKMARK_TYPES } from '../constants'
 import { debounce } from '../utils/helpers'
 
 const ITEMS_PER_PAGE = 12
@@ -19,7 +25,10 @@ export function Bookmarks() {
   const { viewMode, setViewMode, sortBy, setSortBy, filterType, setFilterType, searchQuery, setSearchQuery } = useAppStore()
   const { user } = useAuthStore()
   const { bookmarks, setBookmarks, addBookmark, updateBookmark, removeBookmark, collections } = useBookmarkStore()
+  const { addToast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [viewerFile, setViewerFile] = useState(null)
+  const [playerFile, setPlayerFile] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [editingBookmark, setEditingBookmark] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -101,6 +110,11 @@ export function Bookmarks() {
   const handleBookmarkOpen = async (bookmark) => {
     try {
       await BookmarkService.openBookmark(bookmark.id)
+      if ([BOOKMARK_TYPES.VIDEO, BOOKMARK_TYPES.AUDIO].includes(bookmark.type)) {
+        setPlayerFile(bookmark)
+      } else if ([BOOKMARK_TYPES.IMAGE, BOOKMARK_TYPES.PDF, BOOKMARK_TYPES.MARKDOWN].includes(bookmark.type)) {
+        setViewerFile(bookmark)
+      }
     } catch (err) {
       console.error('Failed to open bookmark:', err)
     }
@@ -155,6 +169,26 @@ export function Bookmarks() {
           <h1 className="page-title">All Bookmarks</h1>
           <p className="page-subtitle">{bookmarks.length} bookmarks total</p>
         </div>
+        <ImportExport
+          exportData={bookmarks}
+          exportFilename="bookmarks"
+          onImport={async (items) => {
+            if (!user) return
+            let imported = 0
+            for (const item of items) {
+              try {
+                const b = await BookmarkService.create(user.id, item)
+                addBookmark(b)
+                imported++
+              } catch (err) {
+                console.error('Failed to import item:', err)
+              }
+            }
+            if (imported > 0) {
+              addToast(`Imported ${imported} bookmarks`, 'success')
+            }
+          }}
+        />
       </div>
 
       <div className="filter-toolbar">
@@ -215,19 +249,38 @@ export function Bookmarks() {
         />
       ) : (
         <>
-          <div className={`bookmarks-grid ${viewMode === 'list' ? 'bookmarks-list' : ''}`}>
-            {paginatedBookmarks.map((bookmark) => (
-              <BookmarkCard
-                key={bookmark.id}
-                bookmark={bookmark}
-                onOpen={handleBookmarkOpen}
-                onFavorite={handleBookmarkFavorite}
-                onEdit={handleBookmarkEdit}
-                onDelete={handleBookmarkDelete}
-                onDuplicate={handleBookmarkDuplicate}
-              />
-            ))}
-          </div>
+          {paginatedBookmarks.length > 30 ? (
+            <VirtualGrid
+              items={paginatedBookmarks}
+              minItemWidth={300}
+              gap={24}
+              renderItem={(bookmark) => (
+                <BookmarkCard
+                  key={bookmark.id}
+                  bookmark={bookmark}
+                  onOpen={handleBookmarkOpen}
+                  onFavorite={handleBookmarkFavorite}
+                  onEdit={handleBookmarkEdit}
+                  onDelete={handleBookmarkDelete}
+                  onDuplicate={handleBookmarkDuplicate}
+                />
+              )}
+            />
+          ) : (
+            <div className={`bookmarks-grid ${viewMode === 'list' ? 'bookmarks-list' : ''}`}>
+              {paginatedBookmarks.map((bookmark) => (
+                <BookmarkCard
+                  key={bookmark.id}
+                  bookmark={bookmark}
+                  onOpen={handleBookmarkOpen}
+                  onFavorite={handleBookmarkFavorite}
+                  onEdit={handleBookmarkEdit}
+                  onDelete={handleBookmarkDelete}
+                  onDuplicate={handleBookmarkDuplicate}
+                />
+              ))}
+            </div>
+          )}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -246,6 +299,9 @@ export function Bookmarks() {
           onDelete={handleBookmarkDelete}
         />
       )}
+
+      {viewerFile && <Viewer file={viewerFile} onClose={() => setViewerFile(null)} />}
+      {playerFile && <Player src={playerFile.url} title={playerFile.title} onEnded={() => setPlayerFile(null)} />}
     </div>
   )
 }

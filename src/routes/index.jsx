@@ -1,19 +1,45 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout'
-import { Dashboard } from '../pages/Dashboard'
-import { Bookmarks } from '../pages/Bookmarks'
-import { Collections } from '../pages/Collections'
-import { Study } from '../pages/Study'
-import { Settings } from '../pages/Settings'
-import { Trash } from '../pages/Trash'
 import { Auth } from '../pages/Auth'
-import { useAuthStore } from '../hooks/useStore'
+import { Skeleton } from '../components/Skeleton'
+
+const Dashboard = lazy(() => import('../pages/Dashboard').then((m) => ({ default: m.Dashboard })))
+const Bookmarks = lazy(() => import('../pages/Bookmarks').then((m) => ({ default: m.Bookmarks })))
+const Collections = lazy(() => import('../pages/Collections').then((m) => ({ default: m.Collections })))
+const Study = lazy(() => import('../pages/Study').then((m) => ({ default: m.Study })))
+const Settings = lazy(() => import('../pages/Settings').then((m) => ({ default: m.Settings })))
+const Trash = lazy(() => import('../pages/Trash').then((m) => ({ default: m.Trash })))
+
+function PageLoader() {
+  return (
+    <div className="page-loader">
+      <div className="bookmarks-grid">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="card skeleton-card">
+            <Skeleton className="skeleton-thumbnail" />
+            <div className="card-body">
+              <Skeleton className="skeleton-title" />
+              <Skeleton className="skeleton-text" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PageWrapper({ children }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+}
 
 function ProtectedRoute({ children }) {
   const { user } = useAuthStore()
   if (!user) return <Auth />
   return children
 }
+
+import { useAuthStore } from '../hooks/useStore'
 
 export const router = createBrowserRouter([
   {
@@ -24,15 +50,15 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'bookmarks', element: <Bookmarks /> },
-      { path: 'favorites', element: <Bookmarks /> },
-      { path: 'pinned', element: <Bookmarks /> },
-      { path: 'recent', element: <Bookmarks /> },
-      { path: 'collections', element: <Collections /> },
-      { path: 'study', element: <Study /> },
-      { path: 'settings', element: <Settings /> },
-      { path: 'trash', element: <Trash /> },
+      { index: true, element: <PageWrapper><Dashboard /></PageWrapper> },
+      { path: 'bookmarks', element: <PageWrapper><Bookmarks /></PageWrapper> },
+      { path: 'favorites', element: <PageWrapper><Bookmarks /></PageWrapper> },
+      { path: 'pinned', element: <PageWrapper><Bookmarks /></PageWrapper> },
+      { path: 'recent', element: <PageWrapper><Bookmarks /></PageWrapper> },
+      { path: 'collections', element: <PageWrapper><Collections /></PageWrapper> },
+      { path: 'study', element: <PageWrapper><Study /></PageWrapper> },
+      { path: 'settings', element: <PageWrapper><Settings /></PageWrapper> },
+      { path: 'trash', element: <PageWrapper><Trash /></PageWrapper> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

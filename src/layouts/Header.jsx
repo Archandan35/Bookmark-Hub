@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus, Bell, Settings, Moon, Sun, LogOut, User, Crown,
 } from 'lucide-react'
@@ -17,6 +17,21 @@ export function Header() {
   const { user, logout } = useAuthStore()
   const { addBookmark, collections } = useBookmarkStore()
   const [showAddModal, setShowAddModal] = useState(false)
+  const searchRef = useRef(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        searchRef.current?.querySelector('input')?.focus()
+      }
+      if (e.key === 'Escape') {
+        searchRef.current?.querySelector('input')?.blur()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleLogout = async () => {
     await AuthService.signOut()
@@ -52,7 +67,7 @@ export function Header() {
             </div>
           </div>
         </div>
-        <div className="header-center">
+        <div className="header-center" ref={searchRef}>
           <SearchBar
             value={searchQuery}
             onChange={setSearchQuery}

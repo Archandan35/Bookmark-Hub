@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import {
   Heart, MoreVertical, ExternalLink, Star, Clock, Eye, Play, Image, FileText, Music, Code,
 } from 'lucide-react'
@@ -18,10 +18,9 @@ const TYPE_ICONS = {
   [BOOKMARK_TYPES.MARKDOWN]: FileText,
 }
 
-export function BookmarkCard({ bookmark, onOpen, onFavorite, onEdit, onDuplicate }) {
+export function BookmarkCard({ bookmark, onOpen, onFavorite, onEdit, onDelete, onDuplicate }) {
   const [contextMenu, setContextMenu] = useState(null)
   const typeConfig = BOOKMARK_TYPE_CONFIG[bookmark.type] || BOOKMARK_TYPE_CONFIG.website
-  const TypeIcon = TYPE_ICONS[bookmark.type]
 
   const handleContextMenu = (e) => {
     e.preventDefault()
@@ -42,7 +41,7 @@ export function BookmarkCard({ bookmark, onOpen, onFavorite, onEdit, onDuplicate
       <Card hover className="bookmark-card" onContextMenu={handleContextMenu}>
         <div className="bookmark-card-thumbnail">
           {bookmark.thumbnail ? (
-            <img src={bookmark.thumbnail} alt={bookmark.title} />
+            <img src={bookmark.thumbnail} alt={bookmark.title} loading="lazy" decoding="async" />
           ) : (
             <div className="bookmark-card-thumbnail-placeholder">
               <span className="bookmark-card-type-icon" style={{ '--badge-color': typeConfig.color }}>
@@ -106,3 +105,17 @@ export function BookmarkCard({ bookmark, onOpen, onFavorite, onEdit, onDuplicate
     </>
   )
 }
+
+export default memo(BookmarkCard, (prev, next) => {
+  return (
+    prev.bookmark.id === next.bookmark.id &&
+    prev.bookmark.is_favorite === next.bookmark.is_favorite &&
+    prev.bookmark.title === next.bookmark.title &&
+    prev.bookmark.progress === next.bookmark.progress &&
+    prev.onOpen === next.onOpen &&
+    prev.onFavorite === next.onFavorite &&
+    prev.onEdit === next.onEdit &&
+    prev.onDelete === next.onDelete &&
+    prev.onDuplicate === next.onDuplicate
+  )
+})

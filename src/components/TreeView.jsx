@@ -1,18 +1,31 @@
 import { useState } from 'react'
-import { ChevronRight, ChevronDown } from 'lucide-react'
+import { ChevronRight, ChevronDown, GripVertical } from 'lucide-react'
 import { cn } from '../utils/helpers'
 
-export function TreeNode({ node, level = 0, onSelect, selectedId }) {
+export function TreeNode({ node, level = 0, onSelect, selectedId, onDragStart, onDragOver, onDragEnd, onDrop, dragOverId }) {
   const [expanded, setExpanded] = useState(false)
   const hasChildren = node.children && node.children.children?.length > 0
 
   return (
     <div className="tree-node">
       <div
-        className={cn('tree-node-content', selectedId === node.id && 'tree-node-active')}
+        className={cn(
+          'tree-node-content',
+          selectedId === node.id && 'tree-node-active',
+          draggedItem?.id === node.id && 'dragging',
+          dragOverId === node.id && 'tree-node-dragover'
+        )}
         style={{ '--node-padding': `${level * 16 + 8}px` }}
         onClick={() => onSelect?.(node)}
+        draggable
+        onDragStart={(e) => onDragStart?.(e, node)}
+        onDragOver={(e) => onDragOver?.(e, node)}
+        onDragLeave={onDragEnd}
+        onDrop={(e) => onDrop?.(e, node)}
       >
+        <span className="tree-node-grip" aria-hidden="true">
+          <GripVertical size={12} />
+        </span>
         {hasChildren ? (
           <button
             className="tree-node-toggle"
@@ -41,6 +54,11 @@ export function TreeNode({ node, level = 0, onSelect, selectedId }) {
               level={level + 1}
               onSelect={onSelect}
               selectedId={selectedId}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
+              dragOverId={dragOverId}
             />
           ))}
         </div>
@@ -49,7 +67,38 @@ export function TreeNode({ node, level = 0, onSelect, selectedId }) {
   )
 }
 
-export function TreeView({ data, onSelect, selectedId }) {
+export function TreeView({ data, onSelect, selectedId, onReorder }) {
+  const [draggedItem, setDraggedItem] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
+
+  const handleDragStart = (e, item) => {
+    setDraggedItem(item)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', item.id)
+    if (e.target) e.target.style.opacity = '0.5'
+  }
+
+  const handleDragEnd = (e) => {
+    if (e.target) e.target.style.opacity = '1'
+    setDraggedItem(null)
+    setDragOverId(null)
+  }
+
+  const handleDragOver = (e, item) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (item.id !== draggedItem?.id) setDragOverId(item.id)
+  }
+
+  const handleDrop = (e, targetItem) => {
+    e.preventDefault()
+    if (draggedItem && draggedItem.id !== targetItem.id) {
+      onReorder?.(draggedItem, targetItem)
+    }
+    setDraggedItem(null)
+    setDragOverId(null)
+  }
+
   return (
     <div className="tree-view">
       {data.map((node) => (
@@ -58,6 +107,11 @@ export function TreeView({ data, onSelect, selectedId }) {
           node={node}
           onSelect={onSelect}
           selectedId={selectedId}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDrop={handleDrop}
+          dragOverId={dragOverId}
         />
       ))}
     </div>

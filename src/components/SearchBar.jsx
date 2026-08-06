@@ -1,9 +1,10 @@
+import { forwardRef } from 'react'
 import { Search, Command } from 'lucide-react'
 import { cn } from '../utils/helpers'
 
-export function SearchBar({ value, onChange, placeholder = 'Search...', className, shortcut = true }) {
+export const SearchBar = forwardRef(function SearchBar({ value, onChange, placeholder = 'Search...', className, shortcut = true }, ref) {
   return (
-    <div className={cn('search-bar', className)}>
+    <div className={cn('search-bar', className)} ref={ref}>
       <Search size={18} className="search-icon" />
       <input
         type="text"
@@ -19,4 +20,4 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', classNam
       )}
     </div>
   )
-}
+})

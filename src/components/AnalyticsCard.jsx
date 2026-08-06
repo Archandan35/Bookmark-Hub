@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '../utils/helpers'
 
-export function AnalyticsCard({ icon: Icon, title, value, change, changeType = 'neutral', description, className }) {
+export const AnalyticsCard = memo(function AnalyticsCard({ icon: Icon, title, value, change, changeType = 'neutral', description, className }) {
   return (
     <div className={cn('analytics-card', className)}>
       <div className="analytics-card-header">
@@ -23,4 +24,4 @@ export function AnalyticsCard({ icon: Icon, title, value, change, changeType = '
       </div>
     </div>
   )
-}
+})

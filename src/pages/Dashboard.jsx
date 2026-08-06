@@ -8,9 +8,10 @@ import { BookmarkCard } from '../components/BookmarkCard'
 import { BookmarkModal } from '../components/BookmarkModal'
 import { Button } from '../components/Button'
 import { ProgressBar } from '../components/ProgressBar'
+import { Viewer } from '../components/Viewer'
+import { Player } from '../components/Player'
 import { useAppStore } from '../hooks/useStore'
-import { useBookmarkStore } from '../hooks/useStore'
-import { useAuthStore } from '../hooks/useStore'
+import { useBookmarkStore, useAuthStore } from '../hooks/useStore'
 import { BOOKMARK_TYPES, SORT_OPTIONS } from '../constants'
 import { Tabs } from '../components/Tabs'
 import { Dropdown } from '../components/Dropdown'
@@ -20,9 +21,11 @@ import { EmptyState } from '../components/EmptyState'
 export function Dashboard() {
   const { viewMode, setViewMode, sortBy, setSortBy, filterType, setFilterType } = useAppStore()
   const { user } = useAuthStore()
-  const { bookmarks, setBookmarks, addBookmark, updateBookmark, removeBookmark, collections } = useBookmarkStore()
+  const { bookmarks, setBookmarks, addBookmark, updateBookmark, removeBookmark, collections, tags } = useBookmarkStore()
   const [editingBookmark, setEditingBookmark] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [viewerFile, setViewerFile] = useState(null)
+  const [playerFile, setPlayerFile] = useState(null)
 
   const stats = [
     { icon: Clock, label: "Today's Study", value: '2h 35m', desc: 'Goal: 4h', progress: 65, color: '#5B3FD6' },
@@ -53,6 +56,11 @@ export function Dashboard() {
   const handleBookmarkOpen = async (bookmark) => {
     try {
       await BookmarkService.openBookmark(bookmark.id)
+      if ([BOOKMARK_TYPES.VIDEO, BOOKMARK_TYPES.AUDIO].includes(bookmark.type)) {
+        setPlayerFile(bookmark)
+      } else if ([BOOKMARK_TYPES.IMAGE, BOOKMARK_TYPES.PDF, BOOKMARK_TYPES.MARKDOWN].includes(bookmark.type)) {
+        setViewerFile(bookmark)
+      }
     } catch (err) {
       console.error('Failed to open bookmark:', err)
     }
@@ -73,10 +81,12 @@ export function Dashboard() {
   }
 
   const handleBookmarkDelete = async (bookmark) => {
+    const previousBookmarks = [...bookmarks]
+    removeBookmark(bookmark.id)
     try {
       await BookmarkService.softDelete(bookmark.id)
-      removeBookmark(bookmark.id)
     } catch (err) {
+      setBookmarks(previousBookmarks)
       console.error('Failed to delete bookmark:', err)
     }
   }
@@ -192,6 +202,13 @@ export function Dashboard() {
           onSave={handleEditSave}
           onDelete={handleBookmarkDelete}
         />
+      )}
+
+      {viewerFile && (
+        <Viewer file={viewerFile} onClose={() => setViewerFile(null)} />
+      )}
+      {playerFile && (
+        <Player src={playerFile.url} title={playerFile.title} onEnded={() => setPlayerFile(null)} />
       )}
     </div>
   )
