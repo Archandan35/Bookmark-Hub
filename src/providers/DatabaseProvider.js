@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase/client'
+import { getCSRFToken } from '../utils/security'
 
 class DatabaseProvider {
   constructor() {
@@ -47,7 +48,9 @@ class DatabaseProvider {
 
   rpc(fn, params) {
     if (!this.isConfigured) return this._mockRpc(fn, params)
-    return this.client.rpc(fn, params)
+    return this.client.rpc(fn, params, {
+      headers: { 'x-csrf-token': getCSRFToken() },
+    })
   }
 
   _mockSignUp(email, password, metadata) {

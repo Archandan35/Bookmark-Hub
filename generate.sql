@@ -352,6 +352,34 @@ CREATE POLICY activity_logs_owner ON public.activity_logs FOR ALL USING (user_id
 CREATE POLICY media_progress_owner ON public.media_progress FOR ALL USING (user_id = auth.uid());
 
 -- ============================================
+-- 11. KEEPALIVE LOG TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.keepalive_log (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source TEXT DEFAULT 'app',
+    strategy TEXT DEFAULT 'unknown',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for keepalive log queries
+CREATE INDEX IF NOT EXISTS idx_keepalive_log_created_at ON public.keepalive_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_keepalive_log_source ON public.keepalive_log(source);
+
+-- ============================================
+-- 12. KEEPALIVE RPC FUNCTION
+-- ============================================
+CREATE OR REPLACE FUNCTION public.keepalive()
+RETURNS JSON AS $$
+BEGIN
+    RETURN json_build_object(
+        'status', 'ok',
+        'timestamp', NOW(),
+        'service', 'bookmarkhub'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================
 -- SEED DATA (Optional - uncomment if needed)
 -- ============================================
 -- Note: Tags are user-specific. Replace with a real user ID or omit.
@@ -372,6 +400,8 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 GRANT SELECT ON public.users TO anon;
 GRANT SELECT ON public.tags TO anon;
+GRANT INSERT ON public.keepalive_log TO authenticated;
+GRANT EXECUTE ON FUNCTION public.keepalive() TO authenticated;
 
 -- ============================================
 -- SCHEMA VERSION TRACKING

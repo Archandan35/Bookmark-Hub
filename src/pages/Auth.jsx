@@ -6,6 +6,7 @@ import { Input } from '../components/Input'
 import { Card } from '../components/Card'
 import { AuthService } from '../services/AuthService'
 import { useAuthStore } from '../hooks/useStore'
+import { secureLog } from '../utils/security'
 import { cn } from '../utils/helpers'
 
 const PASSWORD_RULES = [
@@ -61,7 +62,8 @@ export function Auth() {
         setSession(result.data.session)
       }
     } catch (err) {
-      setError(err.message || 'Authentication failed')
+      secureLog('error', 'Authentication failed', { error: err.message })
+      setError('Authentication failed. Please check your credentials.')
     } finally {
       setLoading(false)
     }

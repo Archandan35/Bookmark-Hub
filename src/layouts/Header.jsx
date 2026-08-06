@@ -11,6 +11,7 @@ import { useAppStore } from '../hooks/useStore'
 import { useAuthStore, useBookmarkStore } from '../hooks/useStore'
 import { AuthService } from '../services/AuthService'
 import { BookmarkService } from '../services/BookmarkService'
+import { clearSensitiveStorage } from '../utils/security'
 
 export function Header() {
   const { theme, toggleTheme, searchQuery, setSearchQuery } = useAppStore()
@@ -35,6 +36,7 @@ export function Header() {
 
   const handleLogout = async () => {
     await AuthService.signOut()
+    clearSensitiveStorage()
     logout()
   }
 

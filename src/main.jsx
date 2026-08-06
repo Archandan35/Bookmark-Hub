@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { keepAliveService } from './services/keepAliveService'
 import './styles/index.css'
 
 createRoot(document.getElementById('root')).render(
@@ -16,6 +17,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       .catch(() => {})
   })
 }
+
+keepAliveService.start();
 
 if (import.meta.env.PROD) {
   window.addEventListener('error', (event) => {
