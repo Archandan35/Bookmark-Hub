@@ -10,6 +10,7 @@ const Collections = lazy(() => import('../pages/Collections').then((m) => ({ def
 const StudySessions = lazy(() => import('../pages/StudySessions').then((m) => ({ default: m.StudySessions })))
 const Settings = lazy(() => import('../pages/Settings').then((m) => ({ default: m.Settings })))
 const Trash = lazy(() => import('../pages/Trash').then((m) => ({ default: m.Trash })))
+const Goals = lazy(() => import('../pages/Goals').then((m) => ({ default: m.Goals })))
 
 function PageLoader() {
   return (
@@ -63,8 +64,10 @@ export const router = createBrowserRouter([
       { path: 'favorites', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'pinned', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'recent', element: <PageWrapper><Bookmarks /></PageWrapper> },
+      { path: 'goals', element: <PageWrapper><Goals /></PageWrapper> },
       { path: 'collections', element: <PageWrapper><Collections /></PageWrapper> },
-      { path: 'study', element: <PageWrapper><Study /></PageWrapper> },
+      { path: 'study', element: <PageWrapper><StudySessions /></PageWrapper> },
+      { path: 'study-sessions', element: <PageWrapper><StudySessions /></PageWrapper> },
       { path: 'settings', element: <PageWrapper><Settings /></PageWrapper> },
       { path: 'trash', element: <PageWrapper><Trash /></PageWrapper> },
     ],
