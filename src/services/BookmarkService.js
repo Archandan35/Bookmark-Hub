@@ -21,10 +21,10 @@ export const BookmarkService = {
       user_id: userId,
       title: sanitizeInput(data.title),
       description: sanitizeInput(data.description || ''),
-      url: sanitizeInput(data.url || ''),
+      url: (data.url || '').trim(),
       type: data.type || 'website',
       collection_id: data.collection_id || null,
-      thumbnail: sanitizeInput(data.thumbnail || ''),
+      thumbnail: (data._uploadedImage || data.thumbnail || '').trim(),
       tags: (data.tags || []).map((t) => sanitizeInput(t)),
       is_favorite: data.is_favorite || false,
       is_pinned: data.is_pinned || false,
@@ -40,6 +40,14 @@ export const BookmarkService = {
 
   async update(id, updates) {
     const sanitized = sanitizeObject(updates)
+    if (updates._uploadedImage) {
+      sanitized.thumbnail = updates._uploadedImage.trim()
+    } else if (updates.thumbnail) {
+      sanitized.thumbnail = updates.thumbnail.trim()
+    }
+    if (updates.url) {
+      sanitized.url = updates.url.trim()
+    }
     return BookmarkRepository.update(id, sanitized)
   },
 

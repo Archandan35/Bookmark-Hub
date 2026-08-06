@@ -129,7 +129,15 @@ export function RightPanel() {
                 }}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') setViewerFile(b) }}
+                 onKeyDown={(e) => {
+                   if (e.key === 'Enter') {
+                     if ([BOOKMARK_TYPES.VIDEO, BOOKMARK_TYPES.AUDIO].includes(b.type)) {
+                       setPlayerFile(b)
+                     } else {
+                       setViewerFile(b)
+                     }
+                   }
+                 }}
               >
                 <div className="media-item-icon">
                   {b.type === 'video' && <Video size={14} />}

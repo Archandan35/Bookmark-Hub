@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { BookmarkCard } from '../components/BookmarkCard'
 import { BookmarkModal } from '../components/BookmarkModal'
 import { EmptyState } from '../components/EmptyState'
@@ -22,6 +23,10 @@ import { debounce } from '../utils/helpers'
 const ITEMS_PER_PAGE = 12
 
 export function Bookmarks() {
+  const location = useLocation()
+  const isFavoritesPage = location.pathname === '/favorites'
+  const isPinnedPage = location.pathname === '/pinned'
+  const isRecentPage = location.pathname === '/recent'
   const { viewMode, setViewMode, sortBy, setSortBy, filterType, setFilterType, searchQuery, setSearchQuery } = useAppStore()
   const { user } = useAuthStore()
   const { bookmarks, setBookmarks, addBookmark, updateBookmark, removeBookmark, collections } = useBookmarkStore()
@@ -32,17 +37,35 @@ export function Bookmarks() {
   const [currentPage, setCurrentPage] = useState(1)
   const [editingBookmark, setEditingBookmark] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+
+  const filteredBookmarks = (() => {
+    let result = bookmarks
+    
+    if (isFavoritesPage) {
+      result = result.filter(b => b.is_favorite)
+    }
+    if (isPinnedPage) {
+      result = result.filter(b => b.is_pinned)
+    }
+    
+    if (filterType !== 'all') {
+      result = result.filter(b => b.type === filterType)
+    }
+    
+    return result
+  })()
 
   const typeFilters = [
-    { id: 'all', label: 'All', count: bookmarks.length },
-    { id: 'website', label: 'Websites', count: bookmarks.filter(b => b.type === 'website').length },
-    { id: 'folder', label: 'Folders', count: bookmarks.filter(b => b.type === 'folder').length },
-    { id: 'pdf', label: 'PDFs', count: bookmarks.filter(b => b.type === 'pdf').length },
-    { id: 'video', label: 'Videos', count: bookmarks.filter(b => b.type === 'video').length },
-    { id: 'audio', label: 'Audio', count: bookmarks.filter(b => b.type === 'audio').length },
-    { id: 'image', label: 'Images', count: bookmarks.filter(b => b.type === 'image').length },
-    { id: 'code', label: 'Code', count: bookmarks.filter(b => b.type === 'code').length },
-    { id: 'note', label: 'Notes', count: bookmarks.filter(b => b.type === 'note').length },
+    { id: 'all', label: 'All', count: filteredBookmarks.length },
+    { id: 'website', label: 'Websites', count: filteredBookmarks.filter(b => b.type === 'website').length },
+    { id: 'folder', label: 'Folders', count: filteredBookmarks.filter(b => b.type === 'folder').length },
+    { id: 'pdf', label: 'PDFs', count: filteredBookmarks.filter(b => b.type === 'pdf').length },
+    { id: 'video', label: 'Videos', count: filteredBookmarks.filter(b => b.type === 'video').length },
+    { id: 'audio', label: 'Audio', count: filteredBookmarks.filter(b => b.type === 'audio').length },
+    { id: 'image', label: 'Images', count: filteredBookmarks.filter(b => b.type === 'image').length },
+    { id: 'code', label: 'Code', count: filteredBookmarks.filter(b => b.type === 'code').length },
+    { id: 'note', label: 'Notes', count: filteredBookmarks.filter(b => b.type === 'note').length },
   ]
 
   useEffect(() => {
@@ -87,16 +110,15 @@ export function Bookmarks() {
     }
   }
 
-  const filteredBookmarks = filterType === 'all'
-    ? bookmarks
-    : bookmarks.filter(b => b.type === filterType)
-
   const sortedBookmarks = [...filteredBookmarks].sort((a, b) => {
+    if (a.is_pinned && !b.is_pinned) return -1
+    if (!a.is_pinned && b.is_pinned) return 1
     switch (sortBy) {
       case 'newest': return new Date(b.created_at || 0) - new Date(a.created_at || 0)
       case 'oldest': return new Date(a.created_at || 0) - new Date(b.created_at || 0)
       case 'alphabetical': return (a.title || '').localeCompare(b.title || '')
       case 'most_viewed': return (b.view_count || 0) - (a.view_count || 0)
+      case 'recently_opened': return new Date(b.last_opened_at || 0) - new Date(a.last_opened_at || 0)
       default: return 0
     }
   })
@@ -126,6 +148,17 @@ export function Bookmarks() {
       updateBookmark(bookmark.id, { is_favorite: updated?.is_favorite ?? !bookmark.is_favorite })
     } catch (err) {
       console.error('Failed to toggle favorite:', err)
+    }
+  }
+
+  const handleBookmarkPin = async (bookmark) => {
+    const newPinnedState = !bookmark.is_pinned
+    updateBookmark(bookmark.id, { is_pinned: newPinnedState })
+    try {
+      await BookmarkService.togglePin(bookmark.id, bookmark.is_pinned)
+    } catch (err) {
+      updateBookmark(bookmark.id, { is_pinned: bookmark.is_pinned })
+      console.error('Failed to toggle pin', err)
     }
   }
 
@@ -159,6 +192,18 @@ export function Bookmarks() {
       updateBookmark(editingBookmark.id, updated)
     } catch (err) {
       console.error('Failed to update:', err)
+    }
+  }
+
+  const handleBookmarkSave = async (data) => {
+    if (!user) return
+    try {
+      const bookmark = await BookmarkService.create(user.id, data)
+      addBookmark(bookmark)
+      setShowAddModal(false)
+      addToast('Bookmark added', 'success')
+    } catch (err) {
+      addToast('Failed to create bookmark', 'error')
     }
   }
 
@@ -244,7 +289,7 @@ export function Bookmarks() {
           icon={Bookmark}
           title="No bookmarks found"
           description={searchQuery ? 'Try a different search term' : 'Add your first bookmark to get started'}
-          action={() => {}}
+          action={() => setShowAddModal(true)}
           actionLabel="Add Bookmark"
         />
       ) : (
@@ -260,6 +305,7 @@ export function Bookmarks() {
                   bookmark={bookmark}
                   onOpen={handleBookmarkOpen}
                   onFavorite={handleBookmarkFavorite}
+                  onPin={handleBookmarkPin}
                   onEdit={handleBookmarkEdit}
                   onDelete={handleBookmarkDelete}
                   onDuplicate={handleBookmarkDuplicate}
@@ -274,6 +320,7 @@ export function Bookmarks() {
                   bookmark={bookmark}
                   onOpen={handleBookmarkOpen}
                   onFavorite={handleBookmarkFavorite}
+                  onPin={handleBookmarkPin}
                   onEdit={handleBookmarkEdit}
                   onDelete={handleBookmarkDelete}
                   onDuplicate={handleBookmarkDuplicate}
@@ -299,6 +346,13 @@ export function Bookmarks() {
           onDelete={handleBookmarkDelete}
         />
       )}
+
+      <BookmarkModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        collections={collections}
+        onSave={handleBookmarkSave}
+      />
 
       {viewerFile && <Viewer file={viewerFile} onClose={() => setViewerFile(null)} />}
       {playerFile && <Player src={playerFile.url} title={playerFile.title} onEnded={() => setPlayerFile(null)} />}

@@ -7,7 +7,7 @@ import { Skeleton } from '../components/Skeleton'
 const Dashboard = lazy(() => import('../pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const Bookmarks = lazy(() => import('../pages/Bookmarks').then((m) => ({ default: m.Bookmarks })))
 const Collections = lazy(() => import('../pages/Collections').then((m) => ({ default: m.Collections })))
-const Study = lazy(() => import('../pages/Study').then((m) => ({ default: m.Study })))
+const StudySessions = lazy(() => import('../pages/StudySessions').then((m) => ({ default: m.StudySessions })))
 const Settings = lazy(() => import('../pages/Settings').then((m) => ({ default: m.Settings })))
 const Trash = lazy(() => import('../pages/Trash').then((m) => ({ default: m.Trash })))
 

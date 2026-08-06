@@ -8,6 +8,7 @@ export const BookmarkRepository = {
       .from(TABLE)
       .select('*')
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
     if (error) throw error
     return data || []
@@ -89,6 +90,7 @@ export const BookmarkRepository = {
       .select('*')
       .eq('user_id', userId)
       .eq('is_favorite', true)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
     if (error) throw error
     return data || []
@@ -100,6 +102,7 @@ export const BookmarkRepository = {
       .select('*')
       .eq('user_id', userId)
       .eq('is_pinned', true)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
     if (error) throw error
     return data || []
@@ -110,6 +113,7 @@ export const BookmarkRepository = {
       .from(TABLE)
       .select('*')
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .order('last_opened_at', { ascending: false })
       .limit(limit)
     if (error) throw error

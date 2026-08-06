@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Bookmark, Heart, Pin, Clock, Trash2, FolderOpen,
   Globe, FileText, Video, Music, FileCode, Image, Code, Archive,
-  StickyNote, Star,
+  StickyNote, Star, Calendar,
 } from 'lucide-react'
 
 export const BOOKMARK_TYPES = {
@@ -67,6 +67,7 @@ export const SIDEBAR_NAV = [
   { id: 'favorites', label: 'Favorites', icon: Heart, path: '/favorites' },
   { id: 'pinned', label: 'Pinned', icon: Pin, path: '/pinned' },
   { id: 'recent', label: 'Recent', icon: Clock, path: '/recent' },
+  { id: 'study-sessions', label: 'Study Sessions', icon: Calendar, path: '/study-sessions' },
   { id: 'trash', label: 'Trash', icon: Trash2, path: '/trash' },
 ]
 

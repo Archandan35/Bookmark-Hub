@@ -94,9 +94,16 @@ export function Dashboard() {
     { id: 'note', label: 'Notes', count: bookmarks.filter(b => b.type === 'note').length },
   ], [bookmarks])
 
-  const filteredBookmarks = useMemo(() => filterType === 'all'
-    ? bookmarks
-    : bookmarks.filter(b => b.type === filterType), [bookmarks, filterType])
+  const filteredBookmarks = useMemo(() => {
+    const filtered = filterType === 'all'
+      ? bookmarks
+      : bookmarks.filter(b => b.type === filterType)
+    return [...filtered].sort((a, b) => {
+      if (a.is_pinned && !b.is_pinned) return -1
+      if (!a.is_pinned && b.is_pinned) return 1
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    })
+  }, [bookmarks, filterType])
 
   const handleBookmarkOpen = async (bookmark) => {
     try {
@@ -117,6 +124,17 @@ export function Dashboard() {
       updateBookmark(bookmark.id, { is_favorite: updated?.is_favorite ?? !bookmark.is_favorite })
     } catch (err) {
       secureLog('error', 'Failed to toggle favorite', { error: err.message })
+    }
+  }
+
+  const handleBookmarkPin = async (bookmark) => {
+    const newPinnedState = !bookmark.is_pinned
+    updateBookmark(bookmark.id, { is_pinned: newPinnedState })
+    try {
+      await BookmarkService.togglePin(bookmark.id, bookmark.is_pinned)
+    } catch (err) {
+      updateBookmark(bookmark.id, { is_pinned: bookmark.is_pinned })
+      secureLog('error', 'Failed to toggle pin', { error: err.message })
     }
   }
 
@@ -284,6 +302,7 @@ export function Dashboard() {
               bookmark={bookmark}
               onOpen={handleBookmarkOpen}
               onFavorite={handleBookmarkFavorite}
+              onPin={handleBookmarkPin}
               onEdit={handleBookmarkEdit}
               onDelete={handleBookmarkDelete}
               onDuplicate={handleBookmarkDuplicate}

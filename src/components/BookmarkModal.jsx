@@ -3,13 +3,35 @@ import { Modal } from './Modal'
 import { Input, Select, Textarea } from './Input'
 import { Button } from './Button'
 import { BOOKMARK_TYPES, BOOKMARK_TYPE_CONFIG } from '../constants'
-import { X, Image, Link } from 'lucide-react'
-import { useState } from 'react'
+import { X, Image, Upload, XCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+
+const DRAFT_KEY = 'bookmarkhub_add_draft'
+
+function loadDraft() {
+  try {
+    const saved = localStorage.getItem(DRAFT_KEY)
+    if (saved) return JSON.parse(saved)
+  } catch {}
+  return null
+}
+
+function saveDraft(data) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(data))
+  } catch {}
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {}
+}
 
 export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, onDelete }) {
   const isEdit = !!bookmark
 
-  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, watch, getValues, setValue } = useForm({
     defaultValues: {
       title: bookmark?.title || '',
       description: bookmark?.description || '',
@@ -22,7 +44,62 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
 
   const selectedType = watch('type')
   const url = watch('url')
-  const [thumbnailPreview, setThumbnailPreview] = useState(bookmark?.thumbnail || '')
+  const thumbnail = watch('thumbnail')
+  const [uploadedImage, setUploadedImage] = useState('')
+  const [showDeleteIcon, setShowDeleteIcon] = useState(false)
+  const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    if (isOpen && !isEdit) {
+      const draft = loadDraft()
+      if (draft) {
+        setValue('title', draft.title || '')
+        setValue('description', draft.description || '')
+        setValue('url', draft.url || '')
+        setValue('type', draft.type || 'website')
+        setValue('collection_id', draft.collection_id || '')
+        setValue('thumbnail', draft.thumbnail || '')
+        if (draft._uploadedImage) setUploadedImage(draft._uploadedImage)
+      }
+    }
+  }, [isOpen, isEdit, setValue])
+
+  useEffect(() => {
+    if (!isOpen && !isEdit) {
+      const data = getValues()
+      saveDraft({ ...data, _uploadedImage: uploadedImage })
+    }
+  }, [isOpen, getValues, uploadedImage])
+
+  useEffect(() => {
+    if (!isEdit) {
+      const subscription = watch((data) => {
+        saveDraft({ ...data, _uploadedImage: uploadedImage })
+      })
+      return () => subscription.unsubscribe()
+    }
+  }, [isEdit, watch, uploadedImage])
+
+  useEffect(() => {
+    if (!isEdit) {
+      const handleBeforeUnload = () => {
+        const data = getValues()
+        saveDraft({ ...data, _uploadedImage: uploadedImage })
+      }
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') {
+          const data = getValues()
+          saveDraft({ ...data, _uploadedImage: uploadedImage })
+        }
+      }
+      window.addEventListener('beforeunload', handleBeforeUnload)
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
+    }
+  }, [isEdit, getValues, uploadedImage])
 
   const typeOptions = Object.entries(BOOKMARK_TYPE_CONFIG).map(([value, config]) => ({
     value,
@@ -38,12 +115,13 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
     const processedData = {
       ...data,
       collection_id: data.collection_id || null,
-      thumbnail: data.thumbnail || thumbnailPreview || '',
+      _uploadedImage: uploadedImage || undefined,
     }
     onSave?.(processedData)
     onClose()
     reset()
-    setThumbnailPreview('')
+    setUploadedImage('')
+    clearDraft()
   }
 
   const handleDelete = () => {
@@ -51,16 +129,42 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
     onClose()
   }
 
-  const fetchThumbnail = () => {
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setUploadedImage(event.target?.result || '')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const getPreviewThumbnail = () => {
+    if (uploadedImage) return uploadedImage
+    if (thumbnail) return thumbnail
     if (url) {
       try {
         const domain = new URL(url).origin
-        setThumbnailPreview(`${domain}/favicon.ico`)
+        return `${domain}/favicon.ico`
       } catch {
-        setThumbnailPreview('')
+        return ''
       }
     }
+    return ''
   }
+
+  const removeThumbnail = () => {
+    setUploadedImage('')
+    setValue('thumbnail', '')
+  }
+
+  const previewThumbnail = getPreviewThumbnail()
 
   return (
     <Modal
@@ -68,6 +172,7 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
       onClose={onClose}
       title={isEdit ? 'Edit Bookmark' : 'Add Bookmark'}
       size="md"
+      closeOnOverlayClick={false}
       footer={
         <div className="modal-footer-actions">
           {isEdit && (
@@ -113,41 +218,61 @@ export function BookmarkModal({ isOpen, onClose, bookmark, collections, onSave, 
         />
 
         {(selectedType === BOOKMARK_TYPES.WEBSITE || selectedType === BOOKMARK_TYPES.VIDEO || selectedType === BOOKMARK_TYPES.AUDIO || selectedType === BOOKMARK_TYPES.PDF) && (
-          <div className="input-group">
-            <div className="input-with-fetch">
-              <Input
-                label="URL"
-                placeholder="https://..."
-                error={errors.url?.message}
-                {...register('url')}
-              />
-              {url && (
-                <button type="button" className="fetch-thumbnail-btn" onClick={fetchThumbnail} aria-label="Fetch thumbnail">
-                  <Link size={14} />
-                </button>
-              )}
-            </div>
-          </div>
+          <Input
+            label="URL"
+            placeholder="https://..."
+            error={errors.url?.message}
+            {...register('url')}
+          />
         )}
 
         <div className="thumbnail-section">
           <label className="input-label">Thumbnail</label>
-          <div className="thumbnail-input-row">
-            <input
-              type="text"
-              className="input thumbnail-input"
-              placeholder="Paste image URL or fetch from link"
-              {...register('thumbnail')}
-            />
-            {thumbnailPreview || watch('thumbnail') ? (
-              <div className="thumbnail-preview">
-                <img src={thumbnailPreview || watch('thumbnail')} alt="Thumbnail" />
+          <div
+            className="thumbnail-upload-area-full"
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onMouseEnter={() => setShowDeleteIcon(true)}
+            onMouseLeave={() => setShowDeleteIcon(false)}
+            onKeyDown={(e) => { if (e.key === 'Enter') fileInputRef.current?.click() }}
+          >
+            {previewThumbnail ? (
+              <div className="thumbnail-preview-wrapper-full">
+                <img src={previewThumbnail} alt="Thumbnail preview" className="thumbnail-preview-img-full" />
+                {showDeleteIcon && (
+                  <button
+                    type="button"
+                    className="thumbnail-delete-btn-full"
+                    onClick={(e) => { e.stopPropagation(); removeThumbnail() }}
+                    aria-label="Remove thumbnail"
+                  >
+                    <XCircle size={20} />
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="thumbnail-placeholder">
-                <Image size={24} />
+              <div className="thumbnail-upload-placeholder-full">
+                <Upload size={32} />
+                <span>Click to upload or paste URL below</span>
               </div>
             )}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            className="thumbnail-file-input"
+            hidden
+          />
+          <Input
+            label="Or paste thumbnail URL"
+            placeholder="https://example.com/image.png"
+            {...register('thumbnail')}
+          />
+          <div className="thumbnail-priority-note">
+            <span>Priority: Uploaded image &gt; Thumbnail URL &gt; Favicon from link</span>
           </div>
         </div>
 
