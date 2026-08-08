@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import {
   ChevronRight, Folder, Film, File,
   ArrowLeft, ArrowRight, ArrowUp, RotateCcw, Home,
 } from 'lucide-react'
 
-export function FileExplorer({ onVideoSelect, currentVideo, folderPermission, onRequestPermission, showFileExplorer }) {
+export const FileExplorer = forwardRef(function FileExplorer({ onVideoSelect, currentVideo, folderPermission, onRequestPermission, showFileExplorer }, ref) {
   const [rootFolder, setRootFolder] = useState(null)
   const [currentFolder, setCurrentFolder] = useState(null)
   const [currentContents, setCurrentContents] = useState([])
@@ -147,6 +147,17 @@ export function FileExplorer({ onVideoSelect, currentVideo, folderPermission, on
     return history.slice(0, historyIndex + 1)
   }, [history, historyIndex])
 
+  useImperativeHandle(ref, () => ({
+    navigateToPath: (targetPath) => {
+      const breadcrumbs = history.slice(0, historyIndex + 1)
+      const target = breadcrumbs.find(b => b.path === targetPath || b.path.endsWith('/' + targetPath))
+      if (target) navigateToFolder(target)
+    },
+    resetToRoot: () => {
+      if (rootFolder) navigateToFolder(rootFolder)
+    }
+  }), [history, historyIndex, rootFolder, navigateToFolder])
+
   if (!folderPermission || !showFileExplorer) return null
 
   const canGoBack = historyIndex > 0
@@ -221,4 +232,4 @@ export function FileExplorer({ onVideoSelect, currentVideo, folderPermission, on
       </div>
     </div>
   )
-}
+})

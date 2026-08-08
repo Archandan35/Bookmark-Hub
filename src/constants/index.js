@@ -69,4 +69,7 @@ export const SIDEBAR_NAV = [
 export const STORAGE_KEY = {
   THEME: 'bookmarkhub_theme',
   SIDEBAR_COLLAPSED: 'bookmarkhub_sidebar_collapsed',
+  HOURLY_CHART_VIEW: 'bookmarkhub_hourly_chart_view',
 }
+
+export const HOURLY_CHART_VIEWS = ['bar', 'line', 'heatmap']

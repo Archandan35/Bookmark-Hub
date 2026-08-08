@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { STORAGE_KEY, THEME_MODES, VIEW_MODES } from '../constants'
+import { STORAGE_KEY, THEME_MODES, VIEW_MODES, HOURLY_CHART_VIEWS } from '../constants'
 
 function getStoredTheme() {
   return localStorage.getItem(STORAGE_KEY.THEME) || THEME_MODES.LIGHT
@@ -7,6 +7,11 @@ function getStoredTheme() {
 
 function getStoredSidebar() {
   return localStorage.getItem(STORAGE_KEY.SIDEBAR_COLLAPSED) === 'true'
+}
+
+function getStoredHourlyChartView() {
+  const stored = localStorage.getItem(STORAGE_KEY.HOURLY_CHART_VIEW)
+  return HOURLY_CHART_VIEWS.includes(stored) ? stored : 'bar'
 }
 
 export const useAppStore = create((set, get) => ({
@@ -18,6 +23,7 @@ export const useAppStore = create((set, get) => ({
   searchQuery: '',
   rightPanelOpen: true,
   bottomDockOpen: false,
+  hourlyChartView: getStoredHourlyChartView(),
 
   setTheme: (theme) => {
     localStorage.setItem(STORAGE_KEY.THEME, theme)
@@ -44,6 +50,11 @@ export const useAppStore = create((set, get) => ({
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   toggleBottomDock: () => set((s) => ({ bottomDockOpen: !s.bottomDockOpen })),
   setBottomDockOpen: (open) => set({ bottomDockOpen: open }),
+  setHourlyChartView: (view) => {
+    if (!HOURLY_CHART_VIEWS.includes(view)) return
+    localStorage.setItem(STORAGE_KEY.HOURLY_CHART_VIEW, view)
+    set({ hourlyChartView: view })
+  },
 }))
 
 export const useAuthStore = create((set) => ({

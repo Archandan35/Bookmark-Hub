@@ -12,6 +12,8 @@ import { Viewer } from '../components/Viewer'
 import { Player } from '../components/Player'
 import { useAppStore } from '../hooks/useStore'
 import { useBookmarkStore, useAuthStore } from '../hooks/useStore'
+import { useSessionStore } from '../hooks/useSessionStore'
+import { useDailyGoal } from '../hooks/useDailyGoal'
 import { BOOKMARK_TYPES, SORT_OPTIONS } from '../constants'
 import { Tabs } from '../components/Tabs'
 import { Dropdown } from '../components/Dropdown'
@@ -31,7 +33,10 @@ export function Dashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [viewerFile, setViewerFile] = useState(null)
   const [playerFile, setPlayerFile] = useState(null)
-  const [sessions, setSessions] = useState([])
+  const sessions = useSessionStore((s) => s.sessions)
+  const addSessions = useSessionStore((s) => s.addSessions)
+  const getTodayStudySeconds = useSessionStore((s) => s.getTodayStudySeconds)
+  const { targetSeconds: dailyGoalSeconds } = useDailyGoal(user?.id)
   const [loading, setLoading] = useState(true)
   const { addToast } = useToast()
 
@@ -50,7 +55,7 @@ export function Dashboard() {
       ])
       setBookmarks(bookmarksData)
       setCollections(collectionsData)
-      setSessions(sessionsData)
+      addSessions(sessionsData)
     } catch (err) {
       secureLog('error', 'Failed to load dashboard data', { error: err.message })
     } finally {
@@ -59,11 +64,9 @@ export function Dashboard() {
   }
 
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
-    const todaySessions = sessions.filter((s) => (s.startTime || s.started_at)?.startsWith(today) && (s.status === 'completed' || s.status === 'stopped'))
-    const todayDuration = todaySessions.reduce((sum, s) => sum + (s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0), 0)
+    const todayDuration = getTodayStudySeconds()
     const todayMinutes = Math.floor(todayDuration / 60)
-    const goalMinutes = 240
+    const goalMinutes = Math.max(1, Math.floor(dailyGoalSeconds / 60))
     const goalPercent = Math.min(100, Math.round((todayMinutes / goalMinutes) * 100))
 
     const typeCounts = bookmarks.reduce((acc, b) => {
@@ -72,7 +75,7 @@ export function Dashboard() {
     }, {})
 
     return [
-      { icon: Clock, label: "Today's Study", value: `${Math.floor(todayMinutes / 60)}h ${todayMinutes % 60}m`, desc: `Goal: ${goalMinutes / 60}h`, progress: goalPercent, color: '#5B3FD6' },
+      { icon: Clock, label: "Today's Study", value: `${Math.floor(todayMinutes / 60)}h ${todayMinutes % 60}m`, desc: `Goal: ${Math.round((goalMinutes / 60) * 10) / 10}h`, progress: goalPercent, color: '#5B3FD6' },
       { icon: Target, label: 'Daily Goal', value: `${goalPercent}%`, desc: todayMinutes < goalMinutes ? `${goalMinutes - todayMinutes}m left` : 'Goal reached!', progress: goalPercent, color: '#22C55E' },
       { icon: Bookmark, label: 'Bookmarks', value: bookmarks.length, desc: `${bookmarks.filter(b => b.is_favorite).length} favorites`, progress: null, color: '#3B82F6' },
       { icon: FolderOpen, label: 'Collections', value: collections.length, desc: `${collections.filter(c => !c.is_archived).length} active`, progress: null, color: '#F59E0B' },
@@ -80,7 +83,7 @@ export function Dashboard() {
       { icon: FileText, label: 'PDFs', value: typeCounts.pdf || 0, desc: `${typeCounts.pdf || 0} total`, progress: null, color: '#EF4444' },
       { icon: StickyNote, label: 'Notes', value: typeCounts.note || 0, desc: `${typeCounts.note || 0} total`, progress: null, color: '#EC4899' },
     ]
-  }, [bookmarks, collections, sessions])
+  }, [bookmarks, collections, sessions, getTodayStudySeconds, dailyGoalSeconds])
 
   const typeFilters = useMemo(() => [
     { id: 'all', label: 'All', count: bookmarks.length },

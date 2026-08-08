@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { User, Palette, Bell, Shield, HardDrive, Globe } from 'lucide-react'
+import { User, Palette, Bell, Shield, HardDrive, Globe, Timer } from 'lucide-react'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { Input, Select } from '../components/Input'
@@ -8,6 +8,8 @@ import { useAppStore } from '../hooks/useStore'
 import { useBookmarkStore, useAuthStore } from '../hooks/useStore'
 import { THEME_MODES } from '../constants'
 import { useToast } from '../components/Toast'
+import { useSessionStore } from '../hooks/useSessionStore'
+import { useDailyGoal } from '../hooks/useDailyGoal'
 
 export function Settings() {
   const { theme, setTheme } = useAppStore()
@@ -31,26 +33,56 @@ export function Settings() {
 
   const { register: registerSecurity, handleSubmit: handleSecuritySubmit } = useForm()
 
+  const { targetSeconds, updateTarget } = useDailyGoal(user?.id)
+  const minSessionSeconds = useSessionStore((s) => s.minSessionSeconds)
+  const setMinSessionSeconds = useSessionStore((s) => s.setMinSessionSeconds)
+  const rememberPauseChoice = useSessionStore((s) => s.rememberPauseChoice)
+  const setRememberPauseChoice = useSessionStore((s) => s.setRememberPauseChoice)
+  const pausePreference = useSessionStore((s) => s.pausePreference)
+
+  const [goalHours, setGoalHours] = useState(() => (targetSeconds / 3600).toString())
+  const [minSeconds, setMinSeconds] = useState(() => minSessionSeconds.toString())
+
+  useEffect(() => { setGoalHours((targetSeconds / 3600).toString()) }, [targetSeconds])
+  useEffect(() => { setMinSeconds(minSessionSeconds.toString()) }, [minSessionSeconds])
+
+  const onStudySave = async () => {
+    const hours = parseFloat(goalHours)
+    const seconds = parseInt(minSeconds, 10)
+    if (!Number.isFinite(hours) || hours < 0) {
+      addToast('Enter a valid daily goal', 'error')
+      return
+    }
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      addToast('Enter a valid minimum session length', 'error')
+      return
+    }
+    setMinSessionSeconds(seconds)
+    await updateTarget(Math.round(hours * 3600))
+    addToast('Study settings saved', 'success')
+  }
+
   const storageStats = useMemo(() => {
     const totalItems = bookmarks.length
-    const videos = bookmarks.filter(b => b.type === 'video').length
-    const pdfs = bookmarks.filter(b => b.type === 'pdf').length
-    const others = totalItems - videos - pdfs
-    const totalSize = totalItems * 0.5
-    const percent = Math.min(100, Math.round((totalSize / 512) * 100))
-    return {
-      totalGB: totalSize.toFixed(1),
-      percent,
-      items: [
-        { label: 'Bookmarks', size: `${(others * 0.3).toFixed(1)} GB`, percent: totalItems > 0 ? Math.round((others / totalItems) * 100) : 0 },
-        { label: 'Videos', size: `${(videos * 2.5).toFixed(1)} GB`, percent: totalItems > 0 ? Math.round((videos / totalItems) * 100) : 0 },
-        { label: 'PDFs', size: `${(pdfs * 0.8).toFixed(1)} GB`, percent: totalItems > 0 ? Math.round((pdfs / totalItems) * 100) : 0 },
-      ]
-    }
+    const byType = bookmarks.reduce((acc, b) => {
+      const key = b.type || 'other'
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+    const items = Object.entries(byType)
+      .map(([label, count]) => ({
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        size: `${count} ${count === 1 ? 'item' : 'items'}`,
+        percent: totalItems > 0 ? Math.round((count / totalItems) * 100) : 0,
+      }))
+      .sort((a, b) => b.percent - a.percent)
+
+    return { totalItems, items }
   }, [bookmarks])
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'study', label: 'Study Timer', icon: Timer },
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
@@ -133,6 +165,41 @@ export function Settings() {
             </Card>
           )}
 
+          {activeTab === 'study' && (
+            <Card className="settings-card">
+              <h3 className="settings-section-title">Study Timer</h3>
+              <div className="settings-form">
+                <Input
+                  label="Daily study goal (hours)"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={goalHours}
+                  onChange={(e) => setGoalHours(e.target.value)}
+                />
+                <Input
+                  label="Minimum session length (seconds)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={minSeconds}
+                  onChange={(e) => setMinSeconds(e.target.value)}
+                />
+                <ToggleItem
+                  label="Remember pause choice"
+                  description={
+                    pausePreference
+                      ? `Applying "${pausePreference === 'pause' ? 'Pause Timer' : 'Continue Timer'}" automatically`
+                      : 'Ask every time the video is paused'
+                  }
+                  checked={rememberPauseChoice}
+                  onChange={() => setRememberPauseChoice(!rememberPauseChoice)}
+                />
+                <Button variant="primary" onClick={onStudySave}>Save Study Settings</Button>
+              </div>
+            </Card>
+          )}
+
           {activeTab === 'notifications' && (
             <Card className="settings-card">
               <h3 className="settings-section-title">Notifications</h3>
@@ -184,15 +251,18 @@ export function Settings() {
             <Card className="settings-card">
               <h3 className="settings-section-title">Storage</h3>
               <div className="storage-info">
-                <div className="storage-bar">
-                  <div className="storage-fill" style={{ '--fill-width': `${storageStats.percent}%` }} />
-                </div>
-                <p className="storage-text">{storageStats.totalGB} GB of 512 GB used ({storageStats.percent}%)</p>
+                <p className="storage-text">
+                  {storageStats.totalItems} {storageStats.totalItems === 1 ? 'item' : 'items'} stored
+                </p>
               </div>
               <div className="storage-breakdown">
-                {storageStats.items.map((item) => (
-                  <StorageItem key={item.label} label={item.label} size={item.size} percent={item.percent} />
-                ))}
+                {storageStats.items.length === 0 ? (
+                  <p className="empty-state-desc">No items yet</p>
+                ) : (
+                  storageStats.items.map((item) => (
+                    <StorageItem key={item.label} label={item.label} size={item.size} percent={item.percent} />
+                  ))
+                )}
               </div>
             </Card>
           )}

@@ -1,24 +1,27 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Clock, TrendingUp, BookOpen, Target, Radar, Info,
-  Calendar, ChevronDown, RotateCcw, AlertCircle,
+  Calendar, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, AlertCircle, Flame,
 } from 'lucide-react'
-import { useAuthStore, useBookmarkStore } from '../hooks/useStore'
-import { useSessionStore } from '../hooks/useSessionStore'
+import { useAuthStore, useBookmarkStore, useAppStore } from '../hooks/useStore'
+import { useSessionStore, focusScoreFor, sessionSeconds } from '../hooks/useSessionStore'
 import { StudyService } from '../services/StudyService'
 import { BookmarkService } from '../services/BookmarkService'
 import { CollectionService } from '../services/CollectionService'
+import { Tabs } from '../components/Tabs'
+import { localDateStr, parseLocalDate } from '../utils/helpers'
 import { secureLog } from '../utils/security'
 
 export function Statistics() {
   const { user } = useAuthStore()
   const { bookmarks, collections, setBookmarks, setCollections } = useBookmarkStore()
-  const { sessions, activeSession, totalStudySeconds, getTodayStudySeconds, getWeeklyStudySeconds, getMonthlyStudySeconds, setSessions } = useSessionStore()
+  const { sessions, getTodayStudySeconds, getWeeklyStudySeconds, getMonthlyStudySeconds, getLifetimeStudySeconds, getSessionsCompletedCount, getSessionHistory, addSessions } = useSessionStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [dateRange, setDateRange] = useState(null)
   const [compareRange, setCompareRange] = useState(null)
+  const [historyFilter, setHistoryFilter] = useState('recent')
 
   useEffect(() => {
     if (user) loadData()
@@ -34,7 +37,7 @@ export function Statistics() {
         BookmarkService.getAll(user.id).catch(() => []),
         CollectionService.getAll(user.id).catch(() => []),
       ])
-      setSessions(sessionsData)
+      addSessions(sessionsData)
       setBookmarks(bookmarksData)
       setCollections(collectionsData)
     } catch (err) {
@@ -43,11 +46,24 @@ export function Statistics() {
     } finally {
       setLoading(false)
     }
-  }, [user, setBookmarks, setCollections, setSessions])
+  }, [user, setBookmarks, setCollections, addSessions])
 
   const completedSessions = useMemo(() => {
-    return sessions.filter(s => s.status === 'completed' || s.status === 'stopped' || s.status === 'paused')
+    return sessions.filter(s => s.status === 'completed' || s.status === 'stopped')
   }, [sessions])
+
+  const todaySeconds = getTodayStudySeconds()
+  const weeklySeconds = getWeeklyStudySeconds()
+  const monthlySeconds = getMonthlyStudySeconds()
+  const lifetimeSeconds = getLifetimeStudySeconds()
+  const sessionsCompletedCount = getSessionsCompletedCount()
+  const allHistory = useMemo(() => getSessionHistory(), [getSessionHistory, sessions])
+  const sessionHistory = useMemo(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return allHistory.filter(s => historyFilter === 'recent'
+      ? new Date(s.startTime).getTime() >= cutoff
+      : new Date(s.startTime).getTime() < cutoff)
+  }, [allHistory, historyFilter])
 
   const previousSessions = useMemo(() => {
     if (completedSessions.length === 0) return []
@@ -82,11 +98,11 @@ export function Statistics() {
   }, [])
 
   const totalDuration = useMemo(() => {
-    return completedSessions.reduce((sum, s) => sum + (s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0), 0)
+    return completedSessions.reduce((sum, s) => sum + sessionSeconds(s), 0)
   }, [completedSessions])
 
   const previousDuration = useMemo(() => {
-    return previousSessions.reduce((sum, s) => sum + (s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0), 0)
+    return previousSessions.reduce((sum, s) => sum + sessionSeconds(s), 0)
   }, [previousSessions])
 
   const sessionsCount = completedSessions.length
@@ -102,34 +118,20 @@ export function Statistics() {
 
   const avgFocusScore = useMemo(() => {
     if (completedSessions.length === 0) return 0
-    let total = 0
-    completedSessions.forEach(s => {
-      const d = s.total_duration || 0
-      if (d > 3600) total += 92
-      else if (d > 1800) total += 88
-      else if (d > 600) total += 82
-      else total += 78
-    })
+    const total = completedSessions.reduce((sum, s) => sum + focusScoreFor(sessionSeconds(s)), 0)
     return Math.round(total / completedSessions.length)
   }, [completedSessions])
 
   const previousAvgFocusScore = useMemo(() => {
     if (previousSessions.length === 0) return 0
-    let total = 0
-    previousSessions.forEach(s => {
-      const d = s.total_duration || 0
-      if (d > 3600) total += 92
-      else if (d > 1800) total += 88
-      else if (d > 600) total += 82
-      else total += 78
-    })
+    const total = previousSessions.reduce((sum, s) => sum + focusScoreFor(sessionSeconds(s)), 0)
     return Math.round(total / previousSessions.length)
   }, [previousSessions])
 
   const dailyGoalAchievement = useMemo(() => {
     if (completedSessions.length === 0) return 0
     const daysWithSessions = new Set(
-      completedSessions.map(s => s.started_at?.split('T')[0])
+      completedSessions.map(s => localDateStr(s.started_at || s.startTime))
     ).size
     const totalDays = Math.max(1, (() => {
       const dates = completedSessions.map(s => new Date(s.started_at).getTime()).sort((a, b) => a - b)
@@ -146,16 +148,14 @@ export function Statistics() {
       website: { label: 'Website', color: '#14B8A6' },
       note: { label: 'Notes', color: '#F59E0B' },
     }
+    const bookmarkById = new Map(bookmarks.map(b => [b.id, b]))
     const result = {}
-    bookmarks.forEach(b => {
-      const type = b.type
-      const sessionsOfType = completedSessions.filter(s => s.bookmark_id === b.id)
-      const duration = sessionsOfType.reduce((sum, s) => sum + (s.total_duration || 0), 0)
+    completedSessions.forEach(s => {
+      const type = bookmarkById.get(s.bookmark_id)?.type || 'others'
       if (!result[type]) {
-        result[type] = { label: typeMap[type]?.label || 'Others', color: typeMap[type]?.color || '#D1D5DB', duration }
-      } else {
-        result[type].duration += duration
+        result[type] = { label: typeMap[type]?.label || 'Others', color: typeMap[type]?.color || '#D1D5DB', duration: 0 }
       }
+      result[type].duration += sessionSeconds(s)
     })
     const total = Object.values(result).reduce((sum, t) => sum + t.duration, 0) || 1
     return Object.entries(result).map(([key, val]) => ({
@@ -180,7 +180,7 @@ export function Statistics() {
       const date = new Date(session.started_at)
       const dayIndex = date.getDay()
       const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1
-      result[adjustedIndex].hours += (session.total_duration || 0) / 3600
+      result[adjustedIndex].hours += sessionSeconds(session) / 3600
     })
     const total = result.reduce((sum, d) => sum + d.hours, 0) || 1
     return result.map(d => ({ ...d, percent: Math.round((d.hours / total) * 100) }))
@@ -205,7 +205,7 @@ export function Statistics() {
         const d = new Date(s.started_at)
         return d >= weekStart && d <= weekEnd
       })
-      const hours = weekSessions.reduce((sum, s) => sum + (s.total_duration || 0), 0) / 3600
+      const hours = weekSessions.reduce((sum, s) => sum + sessionSeconds(s), 0) / 3600
       weeks.push({
         label: `${weekStart.toLocaleDateString('en-US', { month: 'short' })} ${weekStart.getDate()} - ${weekEnd.getDate()}`,
         hours,
@@ -213,33 +213,6 @@ export function Statistics() {
     }
     return weeks
   }, [completedSessions])
-
-  const recentSessions = useMemo(() => {
-    return [...completedSessions]
-      .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
-      .slice(0, 10)
-      .map(session => {
-        const bookmark = bookmarks.find(b => b.id === session.bookmark_id)
-        const duration = session.total_duration || 0
-        let focusScore = 78
-        if (duration > 3600) focusScore = 92
-        else if (duration > 1800) focusScore = 88
-        else if (duration > 600) focusScore = 82
-        const date = new Date(session.started_at)
-        const isToday = date.toDateString() === new Date().toDateString()
-        const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-        return {
-          id: session.id,
-          title: session.bookmark_title || bookmark?.title || 'Unknown Resource',
-          category: bookmark ? `${bookmark.type} / Study` : 'Study',
-          type: bookmark?.type || 'Video',
-          duration,
-          durationFormatted: formatDuration(duration),
-          time: isToday ? `Today, ${timeStr}` : `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${timeStr}`,
-          focusScore,
-        }
-      })
-  }, [completedSessions, bookmarks, formatDuration])
 
   useMemo(() => {
     if (completedSessions.length === 0 && !dateRange) {
@@ -263,11 +236,19 @@ export function Statistics() {
     }
   }, [completedSessions, dateRange])
 
+  const studyTotals = [
+    { id: 'today', label: "Today's Study Hours", value: formatDuration(todaySeconds) },
+    { id: 'weekly', label: 'Weekly Study Hours', value: formatDuration(weeklySeconds) },
+    { id: 'monthly', label: 'Monthly Study Hours', value: formatDuration(monthlySeconds) },
+    { id: 'lifetime', label: 'Lifetime Study Hours', value: formatDuration(lifetimeSeconds) },
+    { id: 'completed', label: 'Sessions Completed', value: sessionsCompletedCount.toString() },
+  ]
+
   const statCards = [
     {
       id: 'study-time',
       label: 'Total Study Time',
-      value: formatDuration(totalDuration),
+      value: formatDuration(lifetimeSeconds),
       icon: Clock,
       iconBg: '#EFF6FF',
       iconColor: '#3B82F6',
@@ -277,7 +258,7 @@ export function Statistics() {
     {
       id: 'sessions',
       label: 'Sessions',
-      value: sessionsCount.toString(),
+      value: sessionsCompletedCount.toString(),
       icon: TrendingUp,
       iconBg: '#F5F3FF',
       iconColor: '#8B5CF6',
@@ -373,6 +354,15 @@ export function Statistics() {
           </div>
         </div>
 
+        <div className="study-totals-row">
+          {studyTotals.map((total) => (
+            <div key={total.id} className="study-total-card">
+              <span className="study-total-label">{total.label}</span>
+              <span className="study-total-value">{total.value}</span>
+            </div>
+          ))}
+        </div>
+
         <div className="stat-cards-grid">
               {statCards.map((card) => (
                 <div key={card.id} className="stat-metric-card">
@@ -411,6 +401,13 @@ export function Statistics() {
 
             {activeTab === 'overview' && (
               <>
+                <HourlyDistributionCard sessions={completedSessions} />
+                <div className="statistics-row monthly-streak-container">
+                  <div className="monthly-streak-col-left">
+                    <MonthlyStreakCard sessions={completedSessions} />
+                  </div>
+                  <div className="monthly-streak-col-right" />
+                </div>
                 <div className="statistics-row">
                   <div className="chart-card combo-chart-card">
                     <div className="chart-card-header">
@@ -467,60 +464,66 @@ export function Statistics() {
                       <button className="view-all-btn">Hours <ChevronDown size={14} /></button>
                     </div>
                     <div className="donut-chart-container">
-                      <DonutChartSVG data={studyByDay} total={formatDuration(totalDuration)} />
+                      <DonutChartSVG data={studyByDay} total={formatDuration(totalDuration)} innerRadius={0} />
                     </div>
                   </div>
                 </div>
 
                 <div className="table-card">
                   <div className="table-card-header">
-                    <h3 className="chart-card-title">Recent Sessions</h3>
-                    <button className="view-all-btn">View All</button>
+                    <h3 className="chart-card-title">Session History</h3>
+                    <div className="table-card-header-actions">
+                      <Tabs
+                        tabs={[
+                          { id: 'recent', label: 'Recent' },
+                          { id: 'older', label: 'Older' },
+                        ]}
+                        activeTab={historyFilter}
+                        onChange={setHistoryFilter}
+                      />
+                      <span className="view-all-btn">{sessionsCompletedCount} total</span>
+                    </div>
                   </div>
                   <table className="sessions-table">
                     <thead>
                       <tr>
-                        <th>Resource</th>
-                        <th>Type</th>
+                        <th>#</th>
+                        <th>Video</th>
+                        <th>Folder</th>
                         <th>Duration</th>
-                        <th>Time</th>
-                        <th>Focus Score</th>
+                        <th>Completion</th>
+                        <th>Date</th>
+                        <th>Start</th>
+                        <th>End</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {recentSessions.length === 0 ? (
+                      {sessionHistory.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="no-sessions">No study sessions yet</td>
+                          <td colSpan="8" className="no-sessions">No study sessions yet</td>
                         </tr>
                       ) : (
-                        recentSessions.map((session) => {
-                          const focusClass = session.focusScore >= 90 ? 'high' : session.focusScore >= 80 ? 'medium' : 'low'
-                          return (
-                            <tr key={session.id}>
-                              <td>
-                                <div className="session-resource">
-                                  <div className="session-resource-icon" style={{ backgroundColor: session.type === 'pdf' ? '#FEF2F2' : '#F5F3FF', color: session.type === 'pdf' ? '#EF4444' : '#8B5CF6' }}>
-                                    {session.type === 'pdf' ? <FileText size={14} /> : <BookOpen size={14} />}
-                                  </div>
-                                  <div className="session-resource-text">
-                                    <span className="session-resource-title">{session.title}</span>
-                                    <span className="session-resource-subtitle">{session.category}</span>
-                                  </div>
+                        sessionHistory.map((session) => (
+                          <tr key={session.id}>
+                            <td>{session.sessionNumber || '—'}</td>
+                            <td>
+                              <div className="session-resource">
+                                <div className="session-resource-icon" style={{ backgroundColor: '#F5F3FF', color: '#8B5CF6' }}>
+                                  <BookOpen size={14} />
                                 </div>
-                              </td>
-                              <td>
-                                <span className="type-badge" style={{ backgroundColor: '#F5F3FF', color: '#7C3AED' }}>
-                                  {session.type === 'pdf' ? 'PDF' : session.type === 'video' ? 'Video' : session.type === 'website' ? 'Website' : 'Note'}
-                                </span>
-                              </td>
-                              <td className="session-duration">{session.durationFormatted}</td>
-                              <td className="session-time">{session.time}</td>
-                              <td>
-                                <span className={`focus-badge ${focusClass}`}>{session.focusScore}</span>
-                              </td>
-                            </tr>
-                          )
-                        })
+                                <div className="session-resource-text">
+                                  <span className="session-resource-title">{session.videoName || session.videoTitle}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>{session.folderName || '—'}</td>
+                            <td className="session-duration">{session.durationFormatted}</td>
+                            <td>{session.completionPercent}%</td>
+                            <td>{session.date}</td>
+                            <td className="session-time">{session.time}</td>
+                            <td className="session-time">{formatEndTime(session.endTime)}</td>
+                          </tr>
+                        ))
                       )}
                     </tbody>
                   </table>
@@ -538,12 +541,564 @@ export function Statistics() {
   )
 }
 
+function dateLabel(dateStr) {
+  if (!dateStr) return ''
+  const today = localDateStr(new Date())
+  const yesterday = localDateStr(new Date(Date.now() - 86400000))
+  if (dateStr === today) return 'Today'
+  if (dateStr === yesterday) return 'Yesterday'
+  const d = parseLocalDate(dateStr)
+  if (!d) return dateStr
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function hourShortLabel(hour) {
+  if (hour === 0) return '12A'
+  if (hour < 12) return `${hour}A`
+  if (hour === 12) return '12P'
+  return `${hour - 12}P`
+}
+
+function heatColor(duration, maxVal) {
+  if (!duration || maxVal <= 0) return '#F3F4F6'
+  const t = Math.min(1, duration / maxVal)
+  const from = [243, 244, 246]
+  const to = [91, 63, 214]
+  const rgb = from.map((v, i) => Math.round(v + (to[i] - v) * t))
+  return `rgb(${rgb.join(',')})`
+}
+
+function HourlyDistributionCard({ sessions }) {
+  const { hourlyChartView, setHourlyChartView } = useAppStore()
+  const [hourlyDate, setHourlyDate] = useState(localDateStr(new Date()))
+  const [selectedHour, setSelectedHour] = useState(null)
+  const [hoverHour, setHoverHour] = useState(null)
+
+  const hourlyData = useMemo(() => buildHourlyData(sessions, hourlyDate), [sessions, hourlyDate])
+  const totalSeconds = useMemo(() => hourlyData.reduce((sum, h) => sum + h.duration, 0), [hourlyData])
+  const maxVal = useMemo(() => Math.max(...hourlyData.map(h => h.duration), 1), [hourlyData])
+
+  const dateSessions = useMemo(() => {
+    const map = new Map()
+    hourlyData.forEach(h => h.sessions.forEach(s => {
+      const key = `${s.start}|${s.elapsed}|${s.title}`
+      if (map.has(key)) map.get(key).dateSeconds += s.seconds
+      else map.set(key, { ...s, dateSeconds: s.seconds })
+    }))
+    return [...map.values()]
+  }, [hourlyData])
+
+  const avgSessionSeconds = dateSessions.length ? totalSeconds / dateSessions.length : 0
+  const longestSessionSeconds = dateSessions.length ? Math.max(...dateSessions.map(s => s.dateSeconds)) : 0
+
+  const setDate = (dateStr) => {
+    if (!dateStr) return
+    setHourlyDate(dateStr)
+    setSelectedHour(null)
+    setHoverHour(null)
+  }
+
+  const todayStr = localDateStr(new Date())
+  const yesterdayStr = localDateStr(new Date(Date.now() - 86400000))
+  const selected = selectedHour !== null ? hourlyData[selectedHour] : null
+
+  return (
+    <div className="chart-card hourly-dist-card">
+      <div className="chart-card-header">
+        <h3 className="chart-card-title">Hourly Study Distribution</h3>
+        <div className="chart-card-header-actions">
+          <div className="hourly-date-control">
+            <button
+              type="button"
+              className={`hourly-date-btn ${hourlyDate === todayStr ? 'active' : ''}`}
+              onClick={() => setDate(todayStr)}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              className={`hourly-date-btn ${hourlyDate === yesterdayStr ? 'active' : ''}`}
+              onClick={() => setDate(yesterdayStr)}
+            >
+              Yesterday
+            </button>
+            <input
+              type="date"
+              className="hourly-date-input"
+              value={hourlyDate}
+              onChange={(e) => setDate(e.target.value)}
+              aria-label="Select date"
+            />
+          </div>
+          <Tabs
+            tabs={[
+              { id: 'bar', label: 'Bar' },
+              { id: 'line', label: 'Line' },
+              { id: 'heatmap', label: 'Heatmap' },
+            ]}
+            activeTab={hourlyChartView}
+            onChange={setHourlyChartView}
+          />
+        </div>
+      </div>
+
+      <div className="hourly-chart-scroll">
+        <div className="hourly-chart-content">
+          {hourlyChartView === 'bar' && (
+            <HourlyBarChart data={hourlyData} maxVal={maxVal} onHover={setHoverHour} onSelect={setSelectedHour} />
+          )}
+          {hourlyChartView === 'line' && (
+            <HourlyLineChart data={hourlyData} maxVal={maxVal} onHover={setHoverHour} onSelect={setSelectedHour} />
+          )}
+          {hourlyChartView === 'heatmap' && (
+            <HourlyHeatmap data={hourlyData} maxVal={maxVal} onHover={setHoverHour} onSelect={setSelectedHour} />
+          )}
+          {hoverHour !== null && (
+            <HourlyTooltip hour={hoverHour} bucket={hourlyData[hoverHour]} compact={hourlyChartView === 'heatmap'} />
+          )}
+        </div>
+      </div>
+
+      <div className="hourly-dist-footer">
+        <span className="hourly-dist-total">Total Study Hours {dateLabel(hourlyDate)}: {formatStudyDuration(totalSeconds)}</span>
+        {totalSeconds === 0 && <span className="hourly-dist-empty-hint">No study recorded for this date</span>}
+        {dateSessions.length > 0 && (
+          <div className="hourly-dist-stats">
+            <div className="hourly-dist-stat">
+              <span className="hourly-dist-stat-label">Avg Session</span>
+              <span className="hourly-dist-stat-value">{formatStudyDuration(avgSessionSeconds)}</span>
+            </div>
+            <div className="hourly-dist-stat">
+              <span className="hourly-dist-stat-label">Longest Session</span>
+              <span className="hourly-dist-stat-value">{formatStudyDuration(longestSessionSeconds)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <HourlyDetails hour={selected.hour} bucket={selected} onClose={() => setSelectedHour(null)} />
+      )}
+    </div>
+  )
+}
+
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function monthCellHours(seconds) {
+  const hrs = Math.floor((seconds || 0) / 3600)
+  const mins = Math.floor(((seconds || 0) % 3600) / 60)
+  if (hrs > 0) return `${hrs}h ${mins}m`
+  if (mins > 0) return `${mins}m`
+  return '0m'
+}
+
+function streakCellInfo(minutes) {
+  if (minutes <= 0) return { bg: '#F1F3F9', dark: false }
+  if (minutes < 60) return { bg: 'rgb(169, 169, 169)', dark: true }
+  if (minutes < 180) return { bg: 'rgb(255, 205, 0)', dark: true }
+  if (minutes < 300) return { bg: 'rgb(247, 255, 0)', dark: true }
+  return { bg: '#5B3FD6', dark: true }
+}
+
+function MonthlyStreakCard({ sessions }) {
+  const now = new Date()
+  const [anchor, setAnchor] = useState({ year: now.getFullYear(), month: now.getMonth() })
+  const [viewMode, setViewMode] = useState('month')
+  const todayStr = localDateStr(new Date())
+
+  const year = anchor.year
+  const month = anchor.month
+  const monthName = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  const daySeconds = useMemo(() => {
+    const map = {}
+    sessions.forEach((s) => {
+      const ds = localDateStr(s.startTime || s.started_at)
+      if (!ds) return
+      const parts = ds.split('-').map(Number)
+      if (parts[0] !== year || parts[1] !== month + 1) return
+      const secs = sessionSeconds(s)
+      if (secs > 0) map[ds] = (map[ds] || 0) + secs
+    })
+    return map
+  }, [sessions, year, month])
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7
+
+  const cells = useMemo(() => {
+    const list = []
+    for (let i = 0; i < firstWeekday; i++) list.push(null)
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${year}-${pad2(month + 1)}-${pad2(d)}`
+      const seconds = daySeconds[ds] || 0
+      list.push({
+        day: d,
+        dateStr: ds,
+        seconds,
+        minutes: Math.round(seconds / 60),
+        studied: seconds > 0,
+        isToday: ds === todayStr,
+        weekday: WEEKDAY_LABELS[(firstWeekday + d - 1) % 7],
+      })
+    }
+    while (list.length % 7 !== 0) list.push(null)
+    return list
+  }, [firstWeekday, daysInMonth, daySeconds, todayStr, year, month])
+
+  const studiedDays = useMemo(
+    () => cells.filter(c => c && c.studied).sort((a, b) => a.dateStr.localeCompare(b.dateStr)),
+    [cells]
+  )
+
+  const totalMonthSeconds = useMemo(() => studiedDays.reduce((sum, c) => sum + c.seconds, 0), [studiedDays])
+
+  const { bestStreak, currentStreak } = useMemo(() => {
+    const ord = (ds) => {
+      const p = parseLocalDate(ds)
+      return p ? Math.floor(p.getTime() / 86400000) : 0
+    }
+    let best = 0
+    let run = 0
+    let prev = null
+    studiedDays.forEach((c) => {
+      const o = ord(c.dateStr)
+      if (prev !== null && o - prev === 1) run += 1
+      else run = 1
+      prev = o
+      if (run > best) best = run
+    })
+
+    let current = 0
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
+    if (isCurrentMonth) {
+      let cursor = new Date()
+      const studiedSet = new Set(studiedDays.map(c => c.dateStr))
+      if (!studiedSet.has(localDateStr(cursor))) cursor.setDate(cursor.getDate() - 1)
+      while (studiedSet.has(localDateStr(cursor))) {
+        current += 1
+        cursor.setDate(cursor.getDate() - 1)
+      }
+    }
+    return { bestStreak: best, currentStreak: current }
+  }, [studiedDays, year, month, now])
+
+  const weeks = useMemo(() => {
+    const groups = []
+    let week = []
+    cells.forEach((c) => {
+      week.push(c)
+      if (week.length === 7) {
+        groups.push(week)
+        week = []
+      }
+    })
+    if (week.length) groups.push(week)
+    return groups
+  }, [cells])
+
+  const navigate = (dir) => {
+    setAnchor(({ year: y, month: m }) => {
+      let nm = m + dir
+      let ny = y
+      if (nm < 0) { nm = 11; ny -= 1 }
+      if (nm > 11) { nm = 0; ny += 1 }
+      return { year: ny, month: nm }
+    })
+  }
+
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
+
+  return (
+    <div className="chart-card monthly-streak-card">
+      <div className="chart-card-header">
+        <h3 className="chart-card-title">
+          <Flame size={14} className="monthly-streak-title-icon" />
+          Monthly Streak
+        </h3>
+        <div className="chart-card-header-actions">
+          <div className="monthly-nav">
+            <button type="button" className="monthly-nav-btn" onClick={() => navigate(-1)} aria-label="Previous month">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="monthly-nav-label">{monthName}</span>
+            <button
+              type="button"
+              className="monthly-nav-btn"
+              onClick={() => navigate(1)}
+              disabled={isCurrentMonth}
+              aria-label="Next month"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <Tabs
+            className="monthly-view-tabs"
+            tabs={[
+              { id: 'month', label: 'Month' },
+              { id: 'week', label: 'Week' },
+            ]}
+            activeTab={viewMode}
+            onChange={setViewMode}
+          />
+        </div>
+      </div>
+
+      <div className="monthly-streak-summary">
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">{isCurrentMonth ? 'Current Streak' : 'Streak'}</span>
+          <span className="monthly-streak-stat-value">{isCurrentMonth ? currentStreak : bestStreak} <span className="monthly-streak-stat-unit">days</span></span>
+        </div>
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">Best Streak</span>
+          <span className="monthly-streak-stat-value">{bestStreak} <span className="monthly-streak-stat-unit">days</span></span>
+        </div>
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">Study Days</span>
+          <span className="monthly-streak-stat-value">{studiedDays.length} <span className="monthly-streak-stat-unit">days</span></span>
+        </div>
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">Total Hours</span>
+          <span className="monthly-streak-stat-value">{formatStudyDuration(totalMonthSeconds)}</span>
+        </div>
+      </div>
+
+      {viewMode === 'month' && (
+        <div className="monthly-calendar">
+          <div className="monthly-calendar-weekdays">
+            {WEEKDAY_LABELS.map((w) => (
+              <span key={w} className="monthly-calendar-weekday">{w}</span>
+            ))}
+          </div>
+          <div className="monthly-calendar-grid">
+            {cells.map((c, i) => {
+              if (!c) return <div key={i} className="monthly-calendar-cell empty" />
+              const cellInfo = c.isToday && !c.studied
+                ? { bg: '#5B3FD6', dark: true }
+                : streakCellInfo(c.minutes)
+              return (
+                <div
+                  key={i}
+                  className={`monthly-calendar-cell ${c.studied ? 'studied' : ''} ${cellInfo.dark ? 'dark' : ''} ${c.isToday ? 'today' : ''}`}
+                  style={{ backgroundColor: cellInfo.bg }}
+                  title={`${c.dateStr}: ${monthCellHours(c.seconds)}`}
+                >
+                  <span className="monthly-calendar-date">{c.day}</span>
+                  <span className="monthly-calendar-hours">{c.studied ? monthCellHours(c.seconds) : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'week' && (
+        <div className="monthly-week-view">
+          {weeks.map((week, wi) => {
+            const weekSeconds = week.filter(Boolean).reduce((sum, c) => sum + c.seconds, 0)
+            return (
+              <div key={wi} className="monthly-week-row">
+                <div className="monthly-week-cells">
+                  {WEEKDAY_LABELS.map((w, di) => {
+                    const c = week[di]
+                    if (!c) return <div key={di} className="monthly-week-cell empty" />
+                    const cellInfo = c.isToday && !c.studied
+                      ? { bg: '#5B3FD6', dark: true }
+                      : streakCellInfo(c.minutes)
+                    return (
+                      <div
+                        key={di}
+                        className={`monthly-week-cell ${c.studied ? 'studied' : ''} ${cellInfo.dark ? 'dark' : ''} ${c.isToday ? 'today' : ''}`}
+                        style={{ backgroundColor: cellInfo.bg }}
+                        title={`${c.dateStr}: ${monthCellHours(c.seconds)}`}
+                      >
+                        <span className="monthly-week-cell-weekday">{w}</span>
+                        <span className="monthly-week-cell-date">{c.day}</span>
+                        <span className="monthly-week-cell-hours">{c.studied ? monthCellHours(c.seconds) : '—'}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="monthly-week-total">
+                  <span className="monthly-week-total-value">{formatStudyDuration(weekSeconds)}</span>
+                  <span className="monthly-week-total-label">Week {wi + 1}</span>
+                </div>
+              </div>
+            )
+          })}
+          {weeks.length === 0 && <p className="empty-state-desc">No weeks to display</p>}
+        </div>
+      )}
+
+      <div className="monthly-streak-footer">
+        <span>Week starting Monday</span>
+        <span className="monthly-streak-legend">
+          <span className="monthly-legend-swatch" style={{ backgroundColor: '#F1F3F9' }} />0
+          <span className="monthly-legend-swatch" style={{ backgroundColor: 'rgb(169, 169, 169)' }} />1h
+          <span className="monthly-legend-swatch" style={{ backgroundColor: 'rgb(255, 205, 0)' }} />3h
+          <span className="monthly-legend-swatch" style={{ backgroundColor: 'rgb(247, 255, 0)' }} />5h
+          <span className="monthly-legend-swatch" style={{ backgroundColor: '#5B3FD6' }} />7h+
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function HourlyBarChart({ data, maxVal, onHover, onSelect }) {
+  return (
+    <div className="time-dist-bars hourly-bars">
+      {data.map((h) => {
+        const height = h.duration > 0 ? Math.max(4, (h.duration / maxVal) * 100) : 2
+        return (
+          <div
+            key={h.hour}
+            className="time-dist-bar-wrapper hourly-bar-wrapper"
+            onClick={() => onSelect(h.hour)}
+            onMouseEnter={() => onHover(h.hour)}
+            onMouseLeave={() => onHover(null)}
+          >
+            <div
+              className={`time-dist-bar hourly-bar ${h.duration > 0 ? 'has-study' : ''}`}
+              style={{ height: `${height}%` }}
+            />
+            <span className="time-dist-label hourly-bar-label">{hourLabel(h.hour)}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function HourlyLineChart({ data, maxVal, onHover, onSelect }) {
+  const W = 720
+  const H = 180
+  const padL = 8
+  const padR = 8
+  const padT = 12
+  const padB = 24
+  const x = (i) => padL + (i * (W - padL - padR)) / 23
+  const y = (v) => padT + (H - padT - padB) * (1 - v / maxVal)
+  const line = data.map((h, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(h.duration).toFixed(1)}`).join(' ')
+  const area = `${line} L ${x(23).toFixed(1)} ${H - padB} L ${x(0).toFixed(1)} ${H - padB} Z`
+
+  return (
+    <div className="focus-chart hourly-line-chart">
+      <svg viewBox={`0 0 ${W} ${H}`} className="focus-sparkline-svg" role="img" aria-label="Hourly study line chart">
+        {[0, 0.25, 0.5, 0.75, 1].map((t, i) => {
+          const yy = padT + (H - padT - padB) * t
+          return <line key={i} x1={padL} y1={yy} x2={W - padR} y2={yy} stroke="#F0F1F4" strokeWidth={1} />
+        })}
+        <path d={area} fill="#5B3FD6" opacity={0.12} />
+        <path d={line} fill="none" stroke="#5B3FD6" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        {data.map((h, i) => (
+          <circle
+            key={h.hour}
+            cx={x(i)}
+            cy={y(h.duration)}
+            r={h.duration > 0 ? 4 : 2.5}
+            fill={h.duration > 0 ? '#5B3FD6' : '#CBD5E1'}
+            onClick={() => onSelect(h.hour)}
+            onMouseEnter={() => onHover(h.hour)}
+            onMouseLeave={() => onHover(null)}
+          />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function HourlyHeatmap({ data, maxVal, onHover, onSelect }) {
+  return (
+    <div className="heatmap-grid hourly-heatmap">
+      {data.map((h) => (
+        <div
+          key={h.hour}
+          className="hourly-heatmap-cell"
+          style={{ backgroundColor: heatColor(h.duration, maxVal) }}
+          title={`${hourLabel(h.hour)} — ${formatStudyDuration(h.duration)}`}
+          onClick={() => onSelect(h.hour)}
+          onMouseEnter={() => onHover(h.hour)}
+          onMouseLeave={() => onHover(null)}
+        >
+          <span className="hourly-heatmap-cell-label">{hourShortLabel(h.hour)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HourlyTooltip({ hour, bucket, compact }) {
+  if (!bucket) return null
+  const sessions = bucket.sessions.length
+  const duration = bucket.duration
+  return (
+    <div className="hourly-tooltip" style={{ left: `${((hour + 0.5) / 24) * 100}%` }}>
+      <div className="hourly-tooltip-title">{compact ? hourLabel(hour) : formatHourRange(hour)}</div>
+      <div className="hourly-tooltip-row">
+        <span>Study Time</span>
+        <strong>{formatStudyDuration(duration)}</strong>
+      </div>
+      <div className="hourly-tooltip-row">
+        <span>Sessions</span>
+        <strong>{sessions}</strong>
+      </div>
+    </div>
+  )
+}
+
+function HourlyDetails({ hour, bucket, onClose }) {
+  const sessions = bucket.sessions
+  const videos = new Set(sessions.map((s) => s.title)).size
+  const first = sessions.length ? sessions.reduce((min, s) => (new Date(s.start) < new Date(min.start) ? s : min), sessions[0]) : null
+  const last = sessions.length ? sessions.reduce((max, s) => (new Date(s.start) > new Date(max.start) ? s : max), sessions[0]) : null
+
+  return (
+    <div className="hourly-details">
+      <div className="hourly-details-header">
+        <span className="hourly-details-title">{formatHourRange(hour)}</span>
+        <button type="button" className="hourly-details-close" onClick={onClose} aria-label="Close details">×</button>
+      </div>
+      {bucket.duration === 0 ? (
+        <p className="hourly-details-empty">No study recorded</p>
+      ) : (
+        <div className="hourly-details-grid">
+          <div className="hourly-details-item">
+            <span className="hourly-details-key">Study Time</span>
+            <span className="hourly-details-value">{formatStudyDuration(bucket.duration)}</span>
+          </div>
+          <div className="hourly-details-item">
+            <span className="hourly-details-key">Sessions</span>
+            <span className="hourly-details-value">{sessions.length}</span>
+          </div>
+          <div className="hourly-details-item">
+            <span className="hourly-details-key">Videos</span>
+            <span className="hourly-details-value">{videos}</span>
+          </div>
+          <div className="hourly-details-item">
+            <span className="hourly-details-key">First Session</span>
+            <span className="hourly-details-value">{first ? formatStudyClock(first.start) : '—'}</span>
+          </div>
+          <div className="hourly-details-item">
+            <span className="hourly-details-key">Last Session</span>
+            <span className="hourly-details-value">{last ? formatStudyClock(last.start) : '—'}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TimeAnalysisTab({ sessions }) {
   const hourlyDistribution = useMemo(() => {
     const hours = Array(24).fill(0)
     sessions.forEach(s => {
       const h = new Date(s.started_at).getHours()
-      hours[h] += s.total_duration || 0
+      hours[h] += sessionSeconds(s)
     })
     const maxVal = Math.max(...hours, 1)
     return hours.map((sec, h) => ({
@@ -562,16 +1117,16 @@ function TimeAnalysisTab({ sessions }) {
 
   const avgSessionLength = useMemo(() => {
     if (sessions.length === 0) return 0
-    return Math.round(sessions.reduce((sum, s) => sum + (s.total_duration || 0), 0) / sessions.length / 60)
+    return Math.round(sessions.reduce((sum, s) => sum + sessionSeconds(s), 0) / sessions.length / 60)
   }, [sessions])
 
   const longestSession = useMemo(() => {
     if (sessions.length === 0) return 0
-    return Math.round(Math.max(...sessions.map(s => s.total_duration || 0)) / 60)
+    return Math.round(Math.max(...sessions.map(s => sessionSeconds(s))) / 60)
   }, [sessions])
 
   const totalMinutes = useMemo(() => {
-    return Math.round(sessions.reduce((sum, s) => sum + (s.total_duration || 0), 0) / 60)
+    return Math.round(sessions.reduce((sum, s) => sum + sessionSeconds(s), 0) / 60)
   }, [sessions])
 
   return (
@@ -630,7 +1185,7 @@ function ContentAnalysisTab({ sessions, bookmarks }) {
     bookmarks.forEach(b => {
       const type = b.type
       const sOfType = sessions.filter(s => s.bookmark_id === b.id)
-      const duration = sOfType.reduce((sum, s) => sum + (s.total_duration || 0), 0)
+      const duration = sOfType.reduce((sum, s) => sum + sessionSeconds(s), 0)
       const count = sOfType.length
       if (!result[type]) {
         result[type] = { type, label: typeMap[type]?.label || 'Others', color: typeMap[type]?.color || '#D1D5DB', bg: typeMap[type]?.bg || '#F3F4F6', duration, count }
@@ -649,14 +1204,14 @@ function ContentAnalysisTab({ sessions, bookmarks }) {
 
   const topResources = useMemo(() => {
     return [...sessions]
-      .sort((a, b) => (b.total_duration || 0) - (a.total_duration || 0))
+      .sort((a, b) => sessionSeconds(b) - sessionSeconds(a))
       .slice(0, 5)
       .map(s => {
         const b = bookmarks.find(bm => bm.id === s.bookmark_id)
         return {
           title: s.bookmark_title || b?.title || 'Unknown',
           type: b?.type || 'unknown',
-          duration: s.total_duration || 0,
+          duration: sessionSeconds(s),
         }
       })
   }, [sessions, bookmarks])
@@ -721,17 +1276,13 @@ function SubjectAnalysisTab({ sessions, bookmarks, collections }) {
     sessions.forEach(s => {
       const bookmark = bookmarks.find(b => b.id === s.bookmark_id)
       const subjectName = collections.find(c => c.id === bookmark?.collection_id)?.name || bookmark?.title || 'Unknown'
-      const duration = s.total_duration || 0
+      const duration = sessionSeconds(s)
       if (!subjectMap[subjectName]) {
-        subjectMap[subjectName] = { name: subjectName, duration, sessions: 0, totalFocus: 0 }
+        subjectMap[subjectName] = { name: subjectName, duration: 0, sessions: 0, totalFocus: 0 }
       }
       subjectMap[subjectName].duration += duration
       subjectMap[subjectName].sessions += 1
-      let focus = 78
-      if (duration > 3600) focus = 92
-      else if (duration > 1800) focus = 88
-      else if (duration > 600) focus = 82
-      subjectMap[subjectName].totalFocus += focus
+      subjectMap[subjectName].totalFocus += focusScoreFor(duration)
     })
     return Object.values(subjectMap)
       .map(s => ({
@@ -791,18 +1342,14 @@ function WeeklyTrendsTab({ sessions }) {
         const d = new Date(s.started_at)
         return d >= weekStart && d <= weekEnd
       })
-      const hours = wSessions.reduce((sum, s) => sum + (s.total_duration || 0), 0) / 3600
+      const hours = wSessions.reduce((sum, s) => sum + sessionSeconds(s), 0) / 3600
       weeks.push({
         label: `${weekStart.toLocaleDateString('en-US', { month: 'short' })} ${weekStart.getDate()} - ${weekEnd.getDate()}`,
         hours: Math.round(hours * 10) / 10,
         sessions: wSessions.length,
-        avgFocus: wSessions.length > 0 ? Math.round(wSessions.reduce((sum, s) => {
-const d = s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0
-          if (d > 3600) return sum + 92
-          if (d > 1800) return sum + 88
-          if (d > 600) return sum + 82
-          return sum + 78
-        }, 0) / wSessions.length) : 0,
+        avgFocus: wSessions.length > 0
+          ? Math.round(wSessions.reduce((sum, s) => sum + focusScoreFor(sessionSeconds(s)), 0) / wSessions.length)
+          : 0,
       })
     }
     return weeks
@@ -861,7 +1408,7 @@ function MonthlyTrendsTab({ sessions }) {
         const d = new Date(s.started_at)
         return d >= monthDate && d <= monthEnd
       })
-      const hours = mSessions.reduce((sum, s) => sum + (s.total_duration || 0), 0) / 3600
+      const hours = mSessions.reduce((sum, s) => sum + sessionSeconds(s), 0) / 3600
       months.push({
         month: monthDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         hours: Math.round(hours * 10) / 10,
@@ -914,7 +1461,7 @@ function ComboChartSVG({ sessions }) {
     sortedSessions.forEach(s => {
       const dayIndex = Math.floor((new Date(s.started_at).getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24))
       if (dayIndex >= 0 && dayIndex < dayCount) {
-        thisPeriod[dayIndex] += (s.total_duration || 0) / 3600
+        thisPeriod[dayIndex] += sessionSeconds(s) / 3600
       }
     })
 
@@ -927,7 +1474,7 @@ function ComboChartSVG({ sessions }) {
       if (sessionDate >= prevStart && sessionDate < prevEnd) {
         const dayIndex = Math.floor((sessionDate.getTime() - prevStart.getTime()) / (1000 * 60 * 60 * 24))
         if (dayIndex >= 0 && dayIndex < dayCount) {
-          lastPeriod[dayIndex] += (s.total_duration || 0) / 3600
+          lastPeriod[dayIndex] += sessionSeconds(s) / 3600
         }
       }
     })
@@ -1020,11 +1567,87 @@ function ComboChartSVG({ sessions }) {
   )
 }
 
-function DonutChartSVG({ data, total }) {
+function formatEndTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+
+function hourLabel(hour) {
+  if (hour === 0) return '12 AM'
+  if (hour < 12) return `${hour} AM`
+  if (hour === 12) return '12 PM'
+  return `${hour - 12} PM`
+}
+
+function formatHourRange(hour) {
+  const pad = (n) => n.toString().padStart(2, '0')
+  return `${pad(hour)}:00 – ${pad((hour + 1) % 24)}:00`
+}
+
+function formatStudyDuration(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds || 0))
+  const h = Math.floor(safe / 3600)
+  const m = Math.floor((safe % 3600) / 60)
+  const s = safe % 60
+  const parts = []
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0 || h > 0) parts.push(`${m}m`)
+  parts.push(`${s}s`)
+  return parts.join(' ')
+}
+
+function formatStudyClock(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function buildHourlyData(sessions, dateStr) {
+  const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, duration: 0, sessions: [] }))
+  const dayStartDate = parseLocalDate(dateStr)
+  if (!dayStartDate) return buckets
+  const dayStart = dayStartDate.getTime()
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000
+  sessions.forEach((s) => {
+    const rawStart = new Date(s.startTime || s.started_at).getTime()
+    if (Number.isNaN(rawStart)) return
+    const elapsed = sessionSeconds(s)
+    if (elapsed <= 0) return
+    const start = rawStart
+    const end = start + elapsed * 1000
+    const a = Math.max(start, dayStart)
+    const b = Math.min(end, dayEnd)
+    if (a >= b) return
+    const title = s.videoName || s.videoTitle || s.bookmark_title || 'Study Session'
+    let cursor = a
+    while (cursor < b) {
+      const hourStart = new Date(cursor)
+      hourStart.setMinutes(0, 0, 0)
+      const hourTs = hourStart.getTime()
+      const nextHour = hourTs + 3600000
+      const segStart = Math.max(cursor, hourTs)
+      const segEnd = Math.min(b, nextHour)
+      const seconds = (segEnd - segStart) / 1000
+      if (seconds > 0) {
+        const h = hourStart.getHours()
+        buckets[h].duration += seconds
+        buckets[h].sessions.push({ title, start: s.startTime || s.started_at, end: s.endTime || s.ended_at, seconds, elapsed })
+      }
+      cursor = Math.min(b, nextHour)
+    }
+  })
+  return buckets
+}
+
+function DonutChartSVG({ data, total, innerRadius = 52 }) {
   const size = 160
   const radius = 80
-  const innerRadius = 52
   const center = size / 2
+  const isPie = innerRadius === 0
   let startAngle = -90
 
   if (!data || data.length === 0) {
@@ -1038,7 +1661,9 @@ function DonutChartSVG({ data, total }) {
     )
   }
 
-  const arcs = data.map((d) => {
+  const visible = data.filter(d => d.percent > 0)
+
+  const arcs = visible.map((d) => {
     const sliceAngle = (d.percent / 100) * 360
     const endAngle = startAngle + sliceAngle
     const startRad = startAngle * Math.PI / 180
@@ -1048,22 +1673,39 @@ function DonutChartSVG({ data, total }) {
     const x2 = center + radius * Math.cos(endRad)
     const y2 = center + radius * Math.sin(endRad)
     const largeArc = sliceAngle > 180 ? 1 : 0
-    const path = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${center + innerRadius * Math.cos(endRad)} ${center + innerRadius * Math.sin(endRad)} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${center + innerRadius * Math.cos(startRad)} ${center + innerRadius * Math.sin(startRad)} Z`
+    const isFull = sliceAngle >= 359.9
+    let path
+    if (isFull) {
+      path = innerRadius > 0
+        ? `M ${center - radius} ${center} A ${radius} ${radius} 0 1 1 ${center + radius} ${center} A ${radius} ${radius} 0 1 1 ${center - radius} ${center} Z M ${center - innerRadius} ${center} A ${innerRadius} ${innerRadius} 0 1 0 ${center + innerRadius} ${center} A ${innerRadius} ${innerRadius} 0 1 0 ${center - innerRadius} ${center} Z`
+        : `M ${center - radius} ${center} A ${radius} ${radius} 0 1 1 ${center + radius} ${center} A ${radius} ${radius} 0 1 1 ${center - radius} ${center} Z`
+    } else {
+      path = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${center + innerRadius * Math.cos(endRad)} ${center + innerRadius * Math.sin(endRad)} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${center + innerRadius * Math.cos(startRad)} ${center + innerRadius * Math.sin(startRad)} Z`
+    }
     startAngle = endAngle
-    return { path, color: d.color, label: d.label, percent: d.percent, hours: d.hours }
+    return { path, color: d.color, label: d.label, percent: d.percent, hours: d.hours, isFull }
   })
 
   return (
     <div className="donut-chart-container">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="donut-svg">
         {arcs.map((arc, i) => (
-          <path key={i} d={arc.path} fill={arc.color} stroke="white" strokeWidth={2} />
+          <path key={i} d={arc.path} fill={arc.color} fillRule={arc.isFull && innerRadius > 0 ? 'evenodd' : 'nonzero'} stroke="white" strokeWidth={2} />
         ))}
-        <text x={center} y={center - 6} textAnchor="middle" fontSize={20} fontWeight={700} fill="#111827">{total}</text>
-        <text x={center} y={center + 12} textAnchor="middle" fontSize={12} fontWeight={500} fill="#9CA3AF">Total</text>
+        {isPie ? (
+          <>
+            <text x={center} y={center - 6} textAnchor="middle" fontSize={20} fontWeight={700} fill="#FFFFFF" stroke="#111827" strokeWidth={4} paintOrder="stroke">{total}</text>
+            <text x={center} y={center + 12} textAnchor="middle" fontSize={12} fontWeight={500} fill="#FFFFFF" stroke="#111827" strokeWidth={3} paintOrder="stroke">Total</text>
+          </>
+        ) : (
+          <>
+            <text x={center} y={center - 6} textAnchor="middle" fontSize={20} fontWeight={700} fill="#111827">{total}</text>
+            <text x={center} y={center + 12} textAnchor="middle" fontSize={12} fontWeight={500} fill="#9CA3AF">Total</text>
+          </>
+        )}
       </svg>
       <div className="donut-legend">
-        {data.map((item, i) => (
+        {visible.map((item, i) => (
           <div key={i} className="donut-legend-row">
             <span className="donut-legend-dot" style={{ backgroundColor: item.color }} />
             <span className="donut-legend-label">{item.label}</span>

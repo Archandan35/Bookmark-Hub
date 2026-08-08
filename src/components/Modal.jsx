@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { Button } from './Button'
 
-export function Modal({ isOpen, onClose, title, children, footer, size = 'md', closeOnOverlayClick = true }) {
+export function Modal({ isOpen, onClose, title, children, footer, size = 'md', closeOnOverlayClick = true, className = '' }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -29,7 +29,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div
-        className={`modal modal-${size}`}
+        className={`modal modal-${size} ${className}`.trim()}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

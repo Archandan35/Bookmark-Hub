@@ -1,37 +1,97 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Play, Pause, Square, Clock, TrendingUp, BarChart3, Video, FileText, Music, Image, Target, Check, CheckCircle, Calendar, Flag, Activity, Flame, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react'
-import { useSessionStore } from '../hooks/useSessionStore'
+import { Play, Pause, StopCircle, RotateCcw, Clock, TrendingUp, BarChart3, Video, FileText, Music, Image, Check, CheckCircle, Flag, Flame, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react'
+import { useSessionStore, formatHMS, VIDEO_STATE } from '../hooks/useSessionStore'
+import { studySessionController } from '../services/studySessionController'
 import { useBookmarkStore, useAuthStore, useAppStore } from '../hooks/useStore'
-import { formatDuration, formatRelativeTime } from '../utils/helpers'
+import { formatDuration, formatRelativeTime, localDateStr } from '../utils/helpers'
 import { Button } from '../components/Button'
 import { StudyService } from '../services/StudyService'
-import { secureLog } from '../utils/security'
+import { StudyTimerPanel } from '../components/study/StudyTimerPanel'
+import { StartStudyModal } from '../components/study/StartStudyModal'
 import { Player } from '../components/Player'
 import { Viewer } from '../components/Viewer'
 import { BOOKMARK_TYPES } from '../constants'
 import { useLocation } from 'react-router-dom'
+import { GoalsService } from '../services/GoalsService'
+import { useDailyGoal } from '../hooks/useDailyGoal'
+
+export function focusScoreFor(durationSeconds) {
+  const d = durationSeconds || 0
+  if (d > 3600) return 92
+  if (d > 1800) return 88
+  if (d > 600) return 82
+  if (d > 0) return 78
+  return 0
+}
+
+function focusCaption(score) {
+  if (!score) return 'Start a session to build your focus score'
+  if (score >= 90) return 'Great focus! Keep it up!'
+  if (score >= 80) return 'Solid focus this session'
+  return 'Try longer uninterrupted sessions'
+}
+
+function formatGoalDate(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function relativeDays(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  const diff = Math.ceil((d - new Date()) / 86400000)
+  if (diff < 0) return 'Overdue'
+  if (diff === 0) return 'Today'
+  return `In ${diff} day${diff === 1 ? '' : 's'}`
+}
 
 function StatisticsRail({ sessions, bookmarks }) {
   const streakData = useMemo(() => {
+    const dayDuration = {}
+    sessions.forEach((s) => {
+      const ds = localDateStr(s.startTime || s.started_at)
+      if (!ds) return
+      dayDuration[ds] = (dayDuration[ds] || 0) + (s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0)
+    })
+    const studied = (ds) => (dayDuration[ds] || 0) > 0
+
+    const today = localDateStr(new Date())
     const days = []
     for (let i = 6; i >= 0; i--) {
       const date = new Date()
       date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split('T')[0]
-      const daySessions = sessions.filter(s => s.started_at?.startsWith(dateStr))
-       const duration = daySessions.reduce((sum, s) => sum + (s.elapsedSeconds || s.elapsed_seconds || 0), 0)
+      const ds = localDateStr(date)
       days.push({
-        date: dateStr,
+        date: ds,
         short: date.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1),
-        completed: duration >= 30 * 60,
+        completed: studied(ds),
       })
     }
+
     let streak = 0
-    for (let i = days.length - 1; i >= 0; i--) {
+    const startIndex = studied(today) ? days.length - 1 : days.length - 2
+    for (let i = startIndex; i >= 0; i--) {
       if (days[i].completed) streak++
       else break
     }
-    return { days, streak }
+
+    const studiedDays = Object.keys(dayDuration).filter(studied).sort()
+    const dayOrd = (ds) => Math.floor(new Date(`${ds}T00:00:00`).getTime() / 86400000)
+    let best = 0
+    let run = 0
+    let prevOrd = null
+    studiedDays.forEach((ds) => {
+      const ord = dayOrd(ds)
+      if (prevOrd !== null && ord - prevOrd === 1) run += 1
+      else run = 1
+      prevOrd = ord
+      if (run > best) best = run
+    })
+
+    return { days, streak, best: Math.max(best, streak) }
   }, [sessions])
 
   const heatmapData = useMemo(() => {
@@ -57,23 +117,32 @@ function StatisticsRail({ sessions, bookmarks }) {
     for (let i = 11; i >= 0; i--) {
       const date = new Date()
       date.setDate(date.getDate() - i * 3)
-      const daySessions = sessions.filter(s => s.started_at?.startsWith(date.toISOString().split('T')[0]))
-      let score = 75
+      const dateStr = localDateStr(date)
+      const daySessions = sessions.filter(s => localDateStr(s.startTime || s.started_at) === dateStr)
+      let score = 0
       if (daySessions.length > 0) {
-        let total = 0
-        daySessions.forEach(s => {
-          const d = s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0
-          if (d > 3600) total += 92
-          else if (d > 1800) total += 88
-          else if (d > 600) total += 82
-          else total += 78
-        })
+        const total = daySessions.reduce(
+          (sum, s) => sum + focusScoreFor(s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0),
+          0
+        )
         score = Math.round(total / daySessions.length)
       }
-      points.push({ date: date.toISOString().split('T')[0], score })
+      points.push({ date: dateStr, score })
     }
     return points
   }, [sessions])
+
+  const focusSummary = useMemo(() => {
+    if (focusScoreData.length === 0) return { average: 0, delta: 0 }
+    const half = Math.max(1, Math.floor(focusScoreData.length / 2))
+    const older = focusScoreData.slice(0, half)
+    const recent = focusScoreData.slice(half)
+    const avg = (arr) => (arr.length ? Math.round(arr.reduce((s, p) => s + p.score, 0) / arr.length) : 0)
+    const recentAvg = avg(recent)
+    const olderAvg = avg(older)
+    const delta = olderAvg > 0 ? Math.round(((recentAvg - olderAvg) / olderAvg) * 100) : 0
+    return { average: avg(focusScoreData), delta }
+  }, [focusScoreData])
 
   const topSubjects = useMemo(() => {
     const colors = ['#3B82F6', '#8B5CF6', '#14B8A6', '#F59E0B', '#D1D5DB']
@@ -114,7 +183,7 @@ function StatisticsRail({ sessions, bookmarks }) {
             <div className="streak-flame-icon"><Flame size={28} /></div>
             <div className="streak-info">
               <span className="streak-value">{streakData.streak} <span className="streak-unit">Days</span></span>
-              <span className="streak-best">Best: 28 Days</span>
+              <span className="streak-best">Best: {streakData.best} Days</span>
             </div>
           </div>
           <div className="streak-week-row">
@@ -168,16 +237,18 @@ function StatisticsRail({ sessions, bookmarks }) {
       <div className="rail-card focus-card">
         <div className="focus-header">
           <h3 className="rail-card-title">Focus Score Trend</h3>
-          <button className="view-details-btn">View Details</button>
+          <span className="view-details-btn">{sessions.length} sessions</span>
         </div>
         <div className="focus-body">
           <div className="focus-chart">
             <FocusScoreSparkline data={focusScoreData} />
           </div>
           <div className="focus-stats">
-            <span className="focus-big-value">87</span>
+            <span className="focus-big-value">{focusSummary.average}</span>
             <span className="focus-caption">Average Score</span>
-            <span className="focus-delta">↑ 8% vs last period</span>
+            <span className="focus-delta">
+              {focusSummary.delta >= 0 ? '↑' : '↓'} {Math.abs(focusSummary.delta)}% vs last period
+            </span>
           </div>
         </div>
       </div>
@@ -185,9 +256,10 @@ function StatisticsRail({ sessions, bookmarks }) {
       <div className="rail-card subjects-card">
         <div className="subjects-header">
           <h3 className="rail-card-title">Top Subjects</h3>
-          <button className="view-details-btn">View All</button>
+          <span className="view-details-btn">{topSubjects.length}</span>
         </div>
         <div className="subjects-list">
+          {topSubjects.length === 0 && <p className="empty-state-desc">No subject data yet</p>}
           {topSubjects.map((subject, i) => (
             <div key={subject.name + i} className="subject-row">
               <span className="subject-rank">{i + 1}</span>
@@ -232,8 +304,12 @@ function FocusScoreSparkline({ data }) {
   const yLabels = ['100', '50', '0']
   const yValues = [100, 50, 0]
 
-  const xLabels = ['May 6', 'May 20', 'Jun 3']
   const xIndices = [0, Math.floor(data.length / 2), data.length - 1]
+  const xLabels = xIndices.map((idx) => {
+    const raw = data[idx]?.date
+    if (!raw) return ''
+    return new Date(raw).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  })
 
   return (
     <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="focus-sparkline-svg">
@@ -265,29 +341,73 @@ function FocusScoreSparkline({ data }) {
 }
 
 function GoalsRail() {
-  const [selectedDay, setSelectedDay] = useState(6)
+  const { user } = useAuthStore()
+  const [goals, setGoals] = useState([])
+  const [milestonesData, setMilestonesData] = useState([])
+  const [viewMonth, setViewMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
+  })
+  const [selectedDay, setSelectedDay] = useState(new Date().getDate())
 
-  const donutData = [
-    { label: 'Completed', value: 12, percent: 32, color: '#10B981' },
-    { label: 'In Progress', value: 20, percent: 52, color: '#3B82F6' },
-    { label: 'Not Started', value: 6, percent: 16, color: '#D9DEE7' },
-  ]
+  const sessions = useSessionStore((s) => s.sessions)
+  const getSessionHistory = useSessionStore((s) => s.getSessionHistory)
 
-  const milestones = [
-    { id: 1, title: 'Complete UGC NET Paper 1', target: 'May 20, 2025', percent: '25% left', days: 'In 5 days', iconBg: '#E5F6EF', iconColor: '#10B981', badgeColor: '#10B981' },
-    { id: 2, title: 'Finish React Hooks Module', target: 'May 25, 2025', percent: '40% left', days: 'In 10 days', iconBg: '#FFF1E0', iconColor: '#F59E0B', badgeColor: '#F59E0B' },
-    { id: 3, title: 'Read Atomic Habits', target: 'May 30, 2025', percent: '80% left', days: 'In 15 days', iconBg: '#EFEAFC', iconColor: '#8B5CF6', badgeColor: '#8B5CF6' },
-  ]
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    Promise.all([GoalsService.getAll(user.id), GoalsService.getMilestones(user.id)]).then(
+      ([g, m]) => {
+        if (cancelled) return
+        setGoals(g)
+        setMilestonesData(m)
+      }
+    )
+    return () => { cancelled = true }
+  }, [user])
 
-  const recentlyCompleted = [
-    { id: 1, title: 'CSS Flexbox Guide', date: 'May 8, 2025', badge: '2h 15m' },
-    { id: 2, title: 'JavaScript Basics', date: 'May 5, 2025', badge: '3h 30m' },
-  ]
+  const stats = useMemo(() => GoalsService.computeStats(goals), [goals])
+
+  const donutData = useMemo(() => ([
+    { label: 'Completed', value: stats.completed, percent: stats.percentOf(stats.completed), color: '#10B981' },
+    { label: 'In Progress', value: stats.inProgress, percent: stats.percentOf(stats.inProgress), color: '#3B82F6' },
+    { label: 'Not Started', value: stats.notStarted, percent: stats.percentOf(stats.notStarted), color: '#D9DEE7' },
+  ]), [stats])
+
+  const milestones = useMemo(() => milestonesData.slice(0, 3).map((m) => ({
+    id: m.id,
+    title: m.title,
+    target: formatGoalDate(m.target_date),
+    percent: `${Math.max(0, 100 - (m.progress || 0))}% left`,
+    days: relativeDays(m.target_date),
+    iconBg: '#E5F6EF',
+    iconColor: m.color || '#10B981',
+    badgeColor: m.color || '#10B981',
+  })), [milestonesData])
+
+  const recentlyCompleted = useMemo(() => {
+    const completedGoals = goals
+      .filter((g) => g.completed || g.status === 'completed')
+      .sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0))
+      .slice(0, 2)
+      .map((g) => ({
+        id: g.id,
+        title: g.title,
+        date: formatGoalDate(g.completed_at),
+        badge: g.goal_type === 'study_time' ? formatHMS(g.current_value || 0) : `${g.current_value || 0}`,
+      }))
+    if (completedGoals.length > 0) return completedGoals
+    return getSessionHistory(2).map((s) => ({
+      id: s.id,
+      title: s.videoName || s.videoTitle,
+      date: formatGoalDate(s.startTime),
+      badge: s.durationFormatted,
+    }))
+  }, [goals, getSessionHistory, sessions])
 
   const calendarDays = useMemo(() => {
     const days = []
-    const year = 2025
-    const month = 4
+    const { year, month } = viewMonth
     const firstDay = new Date(year, month, 1).getDay()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
     const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1
@@ -298,9 +418,39 @@ function GoalsRail() {
       days.push({ day: i, isCurrentMonth: true })
     }
     return days
-  }, [])
+  }, [viewMonth])
 
-  const eventDays = { 3: '#10B981', 13: '#F59E0B', 17: '#10B981', 20: '#8B5CF6', 22: '#8B5CF6', 25: '#EC4899', 26: '#F59E0B' }
+  const eventDays = useMemo(() => {
+    const map = {}
+    const { year, month } = viewMonth
+    milestonesData.forEach((m) => {
+      if (!m.target_date) return
+      const d = new Date(m.target_date)
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        map[d.getDate()] = m.color || '#8B5CF6'
+      }
+    })
+    goals.forEach((g) => {
+      if (!g.target_date) return
+      const d = new Date(g.target_date)
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        map[d.getDate()] = map[d.getDate()] || g.progress_color || '#3B82F6'
+      }
+    })
+    return map
+  }, [milestonesData, goals, viewMonth])
+
+  const monthLabel = new Date(viewMonth.year, viewMonth.month, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const shiftMonth = (delta) => {
+    setViewMonth((prev) => {
+      const d = new Date(prev.year, prev.month + delta, 1)
+      return { year: d.getFullYear(), month: d.getMonth() }
+    })
+  }
 
   return (
     <div className="goals-rail">
@@ -318,16 +468,16 @@ function GoalsRail() {
             ))}
           </div>
         </div>
-        <a href="#" className="goals-footer-link">View detailed analytics <ArrowRight size={12} /></a>
+        <span className="goals-footer-link">{stats.total} goals tracked <ArrowRight size={12} /></span>
       </div>
 
       <div className="right-panel-card">
         <h3 className="right-panel-title">Goal Calendar</h3>
         <div className="goals-calendar-body">
           <div className="goals-calendar-nav">
-            <button className="goals-cal-nav-btn"><ChevronLeft size={16} /></button>
-            <span className="goals-cal-month">May 2025</span>
-            <button className="goals-cal-nav-btn"><ChevronRight size={16} /></button>
+            <button className="goals-cal-nav-btn" type="button" onClick={() => shiftMonth(-1)}><ChevronLeft size={16} /></button>
+            <span className="goals-cal-month">{monthLabel}</span>
+            <button className="goals-cal-nav-btn" type="button" onClick={() => shiftMonth(1)}><ChevronRight size={16} /></button>
           </div>
           <div className="goals-cal-weekdays">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
@@ -351,12 +501,13 @@ function GoalsRail() {
             ))}
           </div>
         </div>
-        <a href="#" className="goals-footer-link">View full calendar <ArrowRight size={12} /></a>
+        <span className="goals-footer-link">{Object.keys(eventDays).length} dated items this month <ArrowRight size={12} /></span>
       </div>
 
       <div className="right-panel-card">
         <h3 className="right-panel-title">Upcoming Milestones</h3>
         <div className="goals-milestones-list">
+          {milestones.length === 0 && <p className="empty-state-desc">No upcoming milestones</p>}
           {milestones.map((m) => (
             <div key={m.id} className="goals-milestone-row">
               <div className="goals-milestone-icon" style={{ backgroundColor: m.iconBg, color: m.iconColor }}>
@@ -373,12 +524,13 @@ function GoalsRail() {
             </div>
           ))}
         </div>
-        <a href="#" className="goals-footer-link">View all milestones <ArrowRight size={12} /></a>
+        <span className="goals-footer-link">{milestonesData.length} milestones <ArrowRight size={12} /></span>
       </div>
 
       <div className="right-panel-card">
         <h3 className="right-panel-title">Recently Completed</h3>
         <div className="goals-recently-list">
+          {recentlyCompleted.length === 0 && <p className="empty-state-desc">Nothing completed yet</p>}
           {recentlyCompleted.map((r) => (
             <div key={r.id} className="goals-recently-row">
               <div className="goals-recently-icon">
@@ -392,57 +544,55 @@ function GoalsRail() {
             </div>
           ))}
         </div>
-        <a href="#" className="goals-footer-link">View all completed <ArrowRight size={12} /></a>
+        <span className="goals-footer-link">{stats.completed} completed goals <ArrowRight size={12} /></span>
       </div>
     </div>
   )
 }
 
 function LearnRail() {
-  const [timerSeconds, setTimerSeconds] = useState(5076) // 1:24:36
-  const [isTimerRunning, setIsTimerRunning] = useState(true)
-  const [pausesTaken, setPausesTaken] = useState(2)
-  const [focusScoreData, setFocusScoreData] = useState([65, 55, 72, 68, 85])
+  const { user } = useAuthStore()
+  const { targetSeconds: dailyGoalSeconds } = useDailyGoal(user?.id)
+  const activeSession = useSessionStore((s) => s.activeSession)
+  const videoState = useSessionStore((s) => s.videoState)
+  const rememberPauseChoice = useSessionStore((s) => s.rememberPauseChoice)
+  const setRememberPauseChoice = useSessionStore((s) => s.setRememberPauseChoice)
+  const getElapsedSeconds = useSessionStore((s) => s.getElapsedSeconds)
+  const isTimerRunning = useSessionStore((s) => s.isTimerRunning)
+  const getTodayStudySeconds = useSessionStore((s) => s.getTodayStudySeconds)
+  const getSessionsCompletedCount = useSessionStore((s) => s.getSessionsCompletedCount)
+  const getSessionHistory = useSessionStore((s) => s.getSessionHistory)
+  useSessionStore((s) => s.now)
+  const railSessions = useSessionStore((s) => s.sessions)
 
-  // Study Timer - live countdown
-  useEffect(() => {
-    let interval = null
-    if (isTimerRunning) {
-      interval = setInterval(() => {
-        setTimerSeconds(prev => prev + 1)
-      }, 1000)
-    }
-    return () => clearInterval(interval)
-  }, [isTimerRunning])
+  const focusScoreData = useMemo(() => {
+    const recent = getSessionHistory(5).reverse()
+    if (recent.length === 0) return [0]
+    return recent.map((s) => focusScoreFor(s.elapsedSeconds))
+  }, [getSessionHistory, railSessions])
 
-  // Focus Score - simulate live data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFocusScoreData(prev => {
-          const newData = [...prev.slice(1), Math.min(100, prev[prev.length - 1] + Math.floor(Math.random() * 10) - 3)]
-        return newData
-      })
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const formatTimer = (totalSeconds) => {
-    const h = Math.floor(totalSeconds / 3600)
-    const m = Math.floor((totalSeconds % 3600) / 60)
-    const s = totalSeconds % 60
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  }
+  const elapsed = getElapsedSeconds()
+  const running = isTimerRunning()
+  const hasVideo = videoState !== VIDEO_STATE.NO_VIDEO
+  const stopped = videoState === VIDEO_STATE.STOPPED
+  const todaySeconds = getTodayStudySeconds()
+  const sessionsCompleted = getSessionsCompletedCount()
+  const goalPercent = dailyGoalSeconds > 0
+    ? Math.min(100, Math.round((todaySeconds / dailyGoalSeconds) * 100))
+    : 0
+  const completion = activeSession?.completionPercent || 0
 
   const handlePauseTimer = () => {
-    setIsTimerRunning(!isTimerRunning)
-    if (isTimerRunning) {
-      setPausesTaken(prev => prev + 1)
+    if (!activeSession) {
+      studySessionController.playFromTimer()
+      return
     }
+    if (running) studySessionController.pauseFromTimer()
+    else studySessionController.playFromTimer()
   }
 
-  const handleStopSession = () => {
-    setIsTimerRunning(false)
-  }
+  const handleStopSession = () => { studySessionController.stop() }
+  const handleReplaySession = () => { studySessionController.replay() }
 
   return (
     <div className="learn-rail">
@@ -450,24 +600,49 @@ function LearnRail() {
       {/* Study Timer */}
       <div className="right-panel-card learn-rail-card">
         <div className="learn-rail-header">
-          <span className="learn-status-dot" style={{ opacity: isTimerRunning ? 1 : 0.5 }} />
+          <span className="learn-status-dot" style={{ opacity: running ? 1 : 0.5 }} />
           <h3 className="learn-rail-title">Study Timer</h3>
         </div>
-        <div className="learn-timer-display">{formatTimer(timerSeconds)}</div>
-        <p className="learn-rail-subtext">Active since 10:15 AM</p>
+        <div className="learn-timer-display">{formatHMS(elapsed)}</div>
+        <p className="learn-rail-subtext">
+          {activeSession
+            ? `Session #${activeSession.sessionNumber} · started ${new Date(activeSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : hasVideo ? 'Ready to start' : 'No video selected'}
+        </p>
         <div className="learn-timer-btns">
-          <button className="learn-btn-outline-sm" onClick={handlePauseTimer}>
-            {isTimerRunning ? <Pause size={14} /> : <Play size={14} />}
-            <span>{isTimerRunning ? 'Pause' : 'Resume'}</span>
-          </button>
-          <button className="learn-btn-danger" onClick={handleStopSession}>
-            <Square size={14} />
-            <span>Stop Session</span>
-          </button>
+          <div className="learn-timer-btn-row">
+            <button
+              className="learn-btn-outline-sm"
+              onClick={handlePauseTimer}
+              disabled={!hasVideo || (!activeSession && stopped)}
+            >
+              {running ? <Pause size={14} /> : <Play size={14} />}
+              <span>{running ? 'Pause' : activeSession ? 'Resume' : 'Play'}</span>
+            </button>
+            {stopped && !activeSession ? (
+              <button className="learn-btn-danger" onClick={handleReplaySession} disabled={!hasVideo}>
+                <RotateCcw size={14} />
+                <span>Replay</span>
+              </button>
+            ) : (
+              <button className="learn-btn-danger" onClick={handleStopSession} disabled={!activeSession}>
+                <StopCircle size={14} />
+                <span>Stop Session</span>
+              </button>
+            )}
+          </div>
+          <label className="learn-timer-remember">
+            <input
+              type="checkbox"
+              checked={rememberPauseChoice}
+              onChange={(e) => setRememberPauseChoice(e.target.checked)}
+            />
+            <span>Remember play/pause interval</span>
+          </label>
         </div>
         <div className="learn-timer-footer">
-          <span>Pauses Taken</span>
-          <span>{pausesTaken}</span>
+          <span>Sessions Completed</span>
+          <span>{sessionsCompleted}</span>
         </div>
       </div>
 
@@ -475,13 +650,16 @@ function LearnRail() {
       <div className="right-panel-card learn-rail-card">
         <h3 className="learn-rail-title">Session Details</h3>
         <div className="learn-details-list">
-          <div className="learn-detail-row"><span>Started At</span><span>Today, 10:15 AM</span></div>
-          <div className="learn-detail-row"><span>Last Active</span><span>Today, 11:39 AM</span></div>
-          <div className="learn-detail-row"><span>Total Time</span><span>01:24:36</span></div>
-          <div className="learn-detail-row"><span>Break Time</span><span>00:08:15</span></div>
-          <div className="learn-detail-row"><span>Completed</span><span>0%</span></div>
-          <div className="learn-detail-row"><span>Notes</span><span>12</span></div>
-          <div className="learn-detail-row"><span>Bookmarks</span><span>5</span></div>
+          <div className="learn-detail-row">
+            <span>Started At</span>
+            <span>{activeSession ? new Date(activeSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+          </div>
+          <div className="learn-detail-row"><span>Video</span><span>{activeSession?.videoName || '—'}</span></div>
+          <div className="learn-detail-row"><span>Folder</span><span>{activeSession?.folderName || '—'}</span></div>
+          <div className="learn-detail-row"><span>Total Time</span><span>{formatHMS(elapsed)}</span></div>
+          <div className="learn-detail-row"><span>Completed</span><span>{completion}%</span></div>
+          <div className="learn-detail-row"><span>Session Number</span><span>{activeSession?.sessionNumber || '—'}</span></div>
+          <div className="learn-detail-row"><span>Status</span><span>{running ? 'Running' : activeSession ? 'Paused' : stopped ? 'Stopped' : 'Idle'}</span></div>
         </div>
       </div>
 
@@ -490,11 +668,11 @@ function LearnRail() {
         <div className="learn-hours-icon">🕐</div>
         <div className="learn-hours-text">
           <span className="learn-hours-label">Total Study Hours Today</span>
-          <span className="learn-hours-value">3h 45m</span>
+          <span className="learn-hours-value">{formatHMS(todaySeconds)}</span>
         </div>
         <div className="learn-hours-delta">
           <TrendingUp size={10} />
-          <span>18% vs yesterday</span>
+          <span>{sessionsCompleted} sessions</span>
         </div>
       </div>
 
@@ -502,12 +680,12 @@ function LearnRail() {
       <div className="right-panel-card learn-rail-card">
         <div className="learn-goal-header">
           <span className="learn-rail-title">Today's Goal</span>
-          <span className="learn-goal-target">3h 30m / 5h</span>
+          <span className="learn-goal-target">{formatHMS(todaySeconds)} / {formatHMS(dailyGoalSeconds)}</span>
         </div>
         <div className="learn-goal-track">
-          <div className="learn-goal-fill" style={{ width: '70%' }} />
+          <div className="learn-goal-fill" style={{ width: `${goalPercent}%` }} />
         </div>
-        <span className="learn-goal-percent">70%</span>
+        <span className="learn-goal-percent">{goalPercent}%</span>
       </div>
 
       {/* Focus Score */}
@@ -521,7 +699,7 @@ function LearnRail() {
         </div>
         <div className="learn-focus-caption">
           <CheckCircle size={14} />
-          <span>Great focus! Keep it up!</span>
+          <span>{focusCaption(focusScoreData[focusScoreData.length - 1])}</span>
         </div>
       </div>
 
@@ -529,11 +707,11 @@ function LearnRail() {
       <div className="right-panel-card learn-rail-card">
         <h3 className="learn-rail-title">Session Activity</h3>
         <div className="learn-activity-list">
-          <div className="learn-activity-row"><span>Video Watched</span><span>15:32 / 1:22:45</span></div>
-          <div className="learn-activity-row"><span>Notes Added</span><span>12</span></div>
-          <div className="learn-activity-row"><span>Bookmarks Added</span><span>5</span></div>
-          <div className="learn-activity-row"><span>Resources Opened</span><span>8</span></div>
-          <div className="learn-activity-row"><span>Chat Interactions</span><span>6</span></div>
+          <div className="learn-activity-row"><span>Current Session</span><span>{formatHMS(elapsed)}</span></div>
+          <div className="learn-activity-row"><span>Video Completion</span><span>{completion}%</span></div>
+          <div className="learn-activity-row"><span>Today</span><span>{formatHMS(todaySeconds)}</span></div>
+          <div className="learn-activity-row"><span>Sessions Completed</span><span>{sessionsCompleted}</span></div>
+          <div className="learn-activity-row"><span>Timer</span><span>{running ? 'Running' : 'Stopped'}</span></div>
         </div>
       </div>
     </div>
@@ -607,10 +785,12 @@ function GoalsDonutChartSVG({ data }) {
 export function RightPanel() {
   const { rightPanelOpen } = useAppStore()
   const { user } = useAuthStore()
-  const { activeSession, sessions, elapsedSeconds, pauseSession, resumeSession, stopSession } = useSessionStore()
+  const { sessions } = useSessionStore()
   const { bookmarks } = useBookmarkStore()
   const [playerFile, setPlayerFile] = useState(null)
   const [viewerFile, setViewerFile] = useState(null)
+  const [showStudySession, setShowStudySession] = useState(true)
+  const [showStartStudy, setShowStartStudy] = useState(false)
   const location = useLocation()
   const isGoalsPage = location.pathname === '/goals'
   const isStatisticsPage = location.pathname === '/statistics'
@@ -640,10 +820,10 @@ export function RightPanel() {
   })
 
   const weeklyData = last7Days.map((date) => {
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = localDateStr(date)
     const daySessions = sessions.filter((s) => {
       const st = s.startTime || s.started_at
-      return st?.startsWith(dateStr) && (s.status === 'completed' || s.status === 'stopped')
+      return localDateStr(st) === dateStr && (s.status === 'completed' || s.status === 'stopped')
     })
     const hours = daySessions.reduce((sum, s) => sum + (s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0), 0) / 3600
     return {
@@ -656,36 +836,6 @@ export function RightPanel() {
   const mediaBookmarks = bookmarks.filter(b =>
     ['video', 'audio', 'image', 'pdf', 'markdown'].includes(b.type)
   ).slice(0, 3)
-
-  const currentElapsed = activeSession?.elapsedSeconds || elapsedSeconds || 0
-  const currentStatus = activeSession?.status || 'idle'
-
-  const handlePause = async () => {
-    if (!activeSession) return
-    try {
-      pauseSession()
-    } catch (err) {
-      secureLog('error', 'Failed to pause session', { error: err })
-    }
-  }
-
-  const handleResume = async () => {
-    if (!activeSession) return
-    try {
-      resumeSession()
-    } catch (err) {
-      secureLog('error', 'Failed to resume session', { error: err })
-    }
-  }
-
-  const handleStop = async () => {
-    if (!activeSession) return
-    try {
-      stopSession()
-    } catch (err) {
-      secureLog('error', 'Failed to stop session', { error: err })
-    }
-  }
 
   const completedSessions = sessions.filter(s => s.status === 'completed' || s.status === 'stopped')
 
@@ -715,28 +865,21 @@ export function RightPanel() {
 
   return (
     <aside className="right-panel">
-      {activeSession && (
-        <div className="right-panel-card">
-          <h3 className="right-panel-title">Current Study Session</h3>
-          <div className="study-session-card">
-            <p className="study-session-file">{activeSession.videoTitle || activeSession.bookmark_title}</p>
-            <div className="study-session-timer">{formatDuration(currentElapsed)}</div>
-            <div className="study-session-controls">
-              {currentStatus === 'active' ? (
-                <Button variant="secondary" size="sm" onClick={handlePause}>
-                  <Pause size={14} /> Pause
-                </Button>
-              ) : (
-                <Button variant="primary" size="sm" onClick={handleResume}>
-                  <Play size={14} /> Resume
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={handleStop}>
-                <Square size={14} /> Stop
-              </Button>
-            </div>
-          </div>
-        </div>
+      {showStudySession ? (
+        <StudyTimerPanel
+          compact
+          dismissible
+          onDismiss={() => setShowStudySession(false)}
+          onStartNew={() => setShowStartStudy(true)}
+        />
+      ) : (
+        <button
+          className="right-panel-reopen-study"
+          onClick={() => setShowStudySession(true)}
+          title="Show Study Session card"
+        >
+          <Play size={14} /> Show Study Session
+        </button>
       )}
 
       {mediaBookmarks.length > 0 && (
@@ -856,6 +999,12 @@ export function RightPanel() {
           </div>
         </div>
       </div>
+
+      <StartStudyModal
+        open={showStartStudy}
+        onClose={() => setShowStartStudy(false)}
+        onStarted={() => {}}
+      />
     </aside>
   )
 }

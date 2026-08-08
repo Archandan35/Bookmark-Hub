@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHand
 import {
   Play, Pause, Square, SkipBack, SkipForward, Volume2, VolumeX,
    Maximize, Minimize, PictureInPicture2, Info, X,
-   Subtitles, MonitorPlay, RotateCcw, Volume1,
-   Repeat, Maximize2, Camera, FolderOpen,
+    Subtitles, MonitorPlay, RotateCcw, Volume1,
+    Repeat, Maximize2, Camera, FolderOpen, Eye, EyeOff,
 } from 'lucide-react'
+import { playerBridge } from '../services/playerBridge'
 
 const VideoPlayer = forwardRef(({
   src,
@@ -13,10 +14,12 @@ const VideoPlayer = forwardRef(({
   onPause,
   onEnded,
   onStop,
+  onReplay,
   onTimeUpdate,
   onLoadedMetadata,
   onRequestPermission,
   activeSession,
+  sessionStopped = false,
   studyTime = 0,
   folderName = '',
 }, ref) => {
@@ -26,6 +29,9 @@ const VideoPlayer = forwardRef(({
   const osdTimerRef = useRef(null)
   const audioContextRef = useRef(null)
   const gainNodeRef = useRef(null)
+  const suppressPauseRef = useRef(false)
+  const stopLockRef = useRef(false)
+  const playLockRef = useRef(false)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -35,10 +41,15 @@ const VideoPlayer = forwardRef(({
     return saved ? parseFloat(saved) : 1
   })
   const [isMuted, setIsMuted] = useState(false)
+  const [lastVolume, setLastVolume] = useState(1)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [showCursor, setShowCursor] = useState(true)
+  const [autoHideControls, setAutoHideControls] = useState(() => {
+    const saved = localStorage.getItem('autoHideControls')
+    return saved !== 'false'
+  })
   const [buffered, setBuffered] = useState(0)
   const [isPiP, setIsPiP] = useState(false)
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
@@ -63,7 +74,9 @@ const VideoPlayer = forwardRef(({
   const [isDragging, setIsDragging] = useState(false)
   const [isSeeking, setIsSeeking] = useState(false)
 
-  const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+  const speeds = [0.5, 0.75, 1, 1.25, 1.35, 1.5, 2]
+  const [customSpeed, setCustomSpeed] = useState('')
+  const [showCustomInput, setShowCustomInput] = useState(false)
 
   const formatTime = (seconds) => {
     if (!seconds || isNaN(seconds)) return '0:00'
@@ -84,28 +97,74 @@ const VideoPlayer = forwardRef(({
     setShowControls(true)
     setShowCursor(true)
     clearTimeout(hideTimerRef.current)
-    if (isPlaying && !isFullscreen) {
+    if (autoHideControls && isPlaying) {
       hideTimerRef.current = setTimeout(() => {
         setShowControls(false)
         setShowCursor(false)
       }, 10000)
     }
-  }, [isPlaying, isFullscreen])
+  }, [autoHideControls, isPlaying])
+
+  const toggleAutoHide = useCallback(() => {
+    setAutoHideControls(prev => {
+      const next = !prev
+      localStorage.setItem('autoHideControls', next.toString())
+      return next
+    })
+  }, [])
+
+  const adjustVolume = useCallback((delta) => {
+    const v = Math.max(0, Math.min(2, volume + delta)); setVolume(v); setIsMuted(false); showOSD(`Volume ${Math.round(v * 100)}%`)
+  }, [volume, showOSD])
 
   useEffect(() => {
     localStorage.setItem('videoVolume', volume.toString())
   }, [volume])
 
-  // Video event handlers
+  // Native wheel handler with passive:false to prevent page scroll over player
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const onWheel = (e) => {
+      e.preventDefault()
+      adjustVolume(e.deltaY > 0 ? -0.05 : 0.05)
+    }
+    container.addEventListener('wheel', onWheel, { passive: false })
+    return () => container.removeEventListener('wheel', onWheel)
+  }, [adjustVolume])
+
+  // Stable event handlers using refs to avoid stale closures
+  const isSeekingRef = useRef(isSeeking)
+  isSeekingRef.current = isSeeking
+  const onPlayRef = useRef(onPlay)
+  onPlayRef.current = onPlay
+  const onPauseRef = useRef(onPause)
+  onPauseRef.current = onPause
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
+  const onTimeUpdateRef = useRef(onTimeUpdate)
+  onTimeUpdateRef.current = onTimeUpdate
+  const onLoadedMetadataRef = useRef(onLoadedMetadata)
+  onLoadedMetadataRef.current = onLoadedMetadata
+
+  // Video event handlers - runs once on mount
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    const handleTimeUpdate = () => { if (!isSeeking) { setCurrentTime(video.currentTime); onTimeUpdate?.(video.currentTime) } }
-    const handleLoadedMetadata = () => { setDuration(video.duration); onLoadedMetadata?.(video.duration) }
+    const handleTimeUpdate = () => { if (!isSeekingRef.current) { setCurrentTime(video.currentTime); onTimeUpdateRef.current?.(video.currentTime) } }
+    const handleLoadedMetadata = () => { setDuration(video.duration); onLoadedMetadataRef.current?.(video.duration) }
     const onProgress = () => { if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1)) }
-    const onPlayEvt = () => { setIsPlaying(true); onPlay?.() }
-    const onPauseEvt = () => { setIsPlaying(false); onPause?.() }
-    const onEndedEvt = () => { setIsPlaying(false); onEnded?.() }
+    const onPlayEvt = () => { setIsPlaying(true); suppressPauseRef.current = false; onPlayRef.current?.() }
+    const onPauseEvt = () => {
+      setIsPlaying(false)
+      if (suppressPauseRef.current) {
+        suppressPauseRef.current = false
+        return
+      }
+      if (video.ended) return
+      onPauseRef.current?.()
+    }
+    const onEndedEvt = () => { setIsPlaying(false); suppressPauseRef.current = true; onEndedRef.current?.() }
     const onVol = () => { setVolume(video.volume); setIsMuted(video.muted) }
     const onPiPEnter = () => setIsPiP(true)
     const onPiPLeave = () => setIsPiP(false)
@@ -118,7 +177,7 @@ const VideoPlayer = forwardRef(({
     video.addEventListener('volumechange', onVol)
     video.addEventListener('enterpictureinpicture', onPiPEnter)
     video.addEventListener('leavepictureinpicture', onPiPLeave)
-        return () => {
+    return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate)
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
       video.removeEventListener('progress', onProgress)
@@ -129,18 +188,60 @@ const VideoPlayer = forwardRef(({
       video.removeEventListener('enterpictureinpicture', onPiPEnter)
       video.removeEventListener('leavepictureinpicture', onPiPLeave)
     }
-  }, [isSeeking, onPlay, onPause, onEnded, onTimeUpdate, onLoadedMetadata])
+  }, [src])
 
-  useImperativeHandle(ref, () => ({
-    play: () => { if (videoRef.current) return videoRef.current.play() },
-    pause: () => { if (videoRef.current) videoRef.current.pause() },
-    stop: () => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0 } },
-    replay: () => { if (videoRef.current) { videoRef.current.currentTime = 0; return videoRef.current.play() } },
+  // Reload video when src changes
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !src) return
+    setCurrentTime(0)
+    setDuration(0)
+    setBuffered(0)
+    setIsPlaying(false)
+    video.load()
+  }, [src])
+
+  const controlsRef = useRef(null)
+  controlsRef.current = {
+    play: () => videoRef.current?.play()?.catch(() => {}),
+    pause: () => { videoRef.current?.pause() },
+    pauseSilently: () => {
+      if (!videoRef.current) return
+      suppressPauseRef.current = true
+      videoRef.current.pause()
+    },
+    stop: () => {
+      if (!videoRef.current) return
+      suppressPauseRef.current = true
+      videoRef.current.pause()
+      videoRef.current.currentTime = 0
+      setCurrentTime(0)
+    },
+    replay: () => {
+      if (!videoRef.current) return undefined
+      videoRef.current.currentTime = 0
+      setCurrentTime(0)
+      return videoRef.current.play()?.catch(() => {})
+    },
     getVideoElement: () => videoRef.current,
     getCurrentTime: () => videoRef.current?.currentTime || 0,
     getDuration: () => videoRef.current?.duration || 0,
     isPlaying: () => isPlaying,
-  }), [isPlaying])
+  }
+
+  useImperativeHandle(ref, () => controlsRef.current, [])
+
+  useEffect(() => {
+    return playerBridge.register({
+      play: () => controlsRef.current.play(),
+      pause: () => controlsRef.current.pause(),
+      pauseSilently: () => controlsRef.current.pauseSilently(),
+      stop: () => controlsRef.current.stop(),
+      replay: () => controlsRef.current.replay(),
+      getCurrentTime: () => controlsRef.current.getCurrentTime(),
+      getDuration: () => controlsRef.current.getDuration(),
+    })
+  }, [])
 
   // Apply volume with Web Audio API for >100% support
   const applyVolume = useCallback((videoElement, vol, muted) => {
@@ -176,6 +277,19 @@ const VideoPlayer = forwardRef(({
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = playbackSpeed
   }, [playbackSpeed])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(hideTimerRef.current)
+      clearTimeout(osdTimerRef.current)
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {})
+        audioContextRef.current = null
+      }
+    }
+  }, [])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -231,25 +345,54 @@ const VideoPlayer = forwardRef(({
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
-  const handlePlay = useCallback(() => videoRef.current?.play(), [])
-  const handlePause = useCallback(() => videoRef.current?.pause(), [])
+  const handlePlay = useCallback(() => {
+    if (playLockRef.current) return
+    playLockRef.current = true
+    setTimeout(() => { playLockRef.current = false }, 300)
+    if (videoRef.current) {
+      videoRef.current.play().then(() => {
+        setIsPlaying(true)
+      }).catch(() => {})
+    }
+  }, [])
+
+  const handlePause = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.pause()
+      setIsPlaying(false)
+    }
+  }, [])
+
   const handleStop = useCallback(() => {
-    if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0 }
-    setIsPlaying(false); showOSD('Stopped')
+    if (stopLockRef.current) return
+    stopLockRef.current = true
+    setTimeout(() => { stopLockRef.current = false }, 500)
+    setIsPlaying(false)
+    showOSD('Stopped')
+    controlsRef.current.stop()
     onStop?.()
   }, [showOSD, onStop])
 
   const handleReplay = useCallback(() => {
-    if (videoRef.current) { videoRef.current.currentTime = 0; videoRef.current.play() }
     showOSD('Replay Started')
-  }, [showOSD])
+    controlsRef.current.replay()
+    onReplay?.()
+  }, [showOSD, onReplay])
 
   const skipForward = useCallback(() => {
-    if (videoRef.current) videoRef.current.currentTime = Math.min(videoRef.current.currentTime + 10, duration)
+    if (videoRef.current) {
+      const newTime = Math.min(videoRef.current.currentTime + 10, duration || videoRef.current.duration || 0)
+      videoRef.current.currentTime = newTime
+      setCurrentTime(newTime)
+    }
   }, [duration])
 
   const skipBackward = useCallback(() => {
-    if (videoRef.current) videoRef.current.currentTime = Math.max(videoRef.current.currentTime - 10, 0)
+    if (videoRef.current) {
+      const newTime = Math.max(videoRef.current.currentTime - 10, 0)
+      videoRef.current.currentTime = newTime
+      setCurrentTime(newTime)
+    }
   }, [])
 
   const skipSeconds = useCallback((sec) => {
@@ -281,13 +424,17 @@ const VideoPlayer = forwardRef(({
     setHoverTime(pct * duration); setHoverPosition(pct * 100)
   }, [duration])
 
-  const adjustVolume = useCallback((delta) => {
-    const v = Math.max(0, Math.min(2, volume + delta)); setVolume(v); setIsMuted(false); showOSD(`Volume ${Math.round(v * 100)}%`)
-  }, [volume, showOSD])
-
   const toggleMute = useCallback(() => {
-    setIsMuted(p => !p); showOSD(!isMuted ? 'Muted' : 'Unmuted')
-  }, [isMuted, showOSD])
+    if (isMuted) {
+      setVolume(lastVolume > 0 ? lastVolume : 1)
+      setIsMuted(false)
+      showOSD(`Volume ${Math.round((lastVolume > 0 ? lastVolume : 1) * 100)}%`)
+    } else {
+      setLastVolume(volume)
+      setIsMuted(true)
+      showOSD('Muted')
+    }
+  }, [isMuted, lastVolume, volume, showOSD])
 
   const handleVolumeChange = useCallback((e) => {
     const v = parseFloat(e.target.value); setVolume(v); setIsMuted(v === 0)
@@ -297,9 +444,34 @@ const VideoPlayer = forwardRef(({
 
   const cycleSpeed = useCallback((dir) => {
     const idx = speeds.indexOf(playbackSpeed)
-    const ni = Math.max(0, Math.min(speeds.length - 1, idx + dir))
+    let ni
+    if (idx === -1) {
+      // Custom speed: find closest preset
+      const sorted = speeds.map((s, i) => ({ s, i, d: Math.abs(s - playbackSpeed) })).sort((a, b) => a.d - b.d)
+      const closestIdx = sorted[0].i
+      ni = dir > 0 ? Math.min(speeds.length - 1, closestIdx + 1) : Math.max(0, closestIdx - 1)
+    } else {
+      ni = Math.max(0, Math.min(speeds.length - 1, idx + dir))
+    }
     setPlaybackSpeed(speeds[ni]); showOSD(`Speed: ${speeds[ni]}x`)
   }, [playbackSpeed, speeds, showOSD])
+
+  const applyCustomSpeed = useCallback((val) => {
+    const num = parseFloat(val)
+    if (!isNaN(num) && num >= 0.1 && num <= 4) {
+      setPlaybackSpeed(num)
+      setShowCustomInput(false)
+      setShowSpeedMenu(false)
+      showOSD(`Speed: ${num}x`)
+    }
+  }, [showOSD])
+
+  const adjustCustomSpeed = useCallback((delta) => {
+    const next = Math.max(0.1, Math.min(4, +(playbackSpeed + delta).toFixed(2)))
+    setPlaybackSpeed(next)
+    setCustomSpeed(next.toString())
+    showOSD(`Speed: ${next}x`)
+  }, [playbackSpeed, showOSD])
 
   const enterFullscreen = useCallback(async () => {
     try { await containerRef.current?.requestFullscreen(); setIsFullscreen(true); showOSD('Fullscreen') }
@@ -326,23 +498,46 @@ const VideoPlayer = forwardRef(({
 
   // Loop toggle
   const toggleLoop = useCallback(() => {
-    setIsLooping(prev => !prev)
-    if (videoRef.current) videoRef.current.loop = !isLooping
-    showOSD(!isLooping ? 'Loop Enabled' : 'Loop Disabled')
-  }, [isLooping, showOSD])
+    setIsLooping(prev => {
+      const next = !prev
+      if (videoRef.current) videoRef.current.loop = next
+      showOSD(next ? 'Loop Enabled' : 'Loop Disabled')
+      return next
+    })
+  }, [showOSD])
 
   // Aspect ratio
   const handleAspectChange = useCallback((ratio) => {
     setAspectRatio(ratio)
     setShowAspectMenu(false)
     showOSD(`Aspect Ratio: ${ratio}`)
+    if (videoRef.current) {
+      videoRef.current.style.aspectRatio = ''
+      videoRef.current.style.objectFit = ''
+      videoRef.current.style.width = ''
+      videoRef.current.style.height = ''
+    }
   }, [showOSD])
+
+  const getAspectStyle = useCallback(() => {
+    const ratioMap = {
+      'default': { objectFit: 'contain', aspectRatio: 'auto' },
+      '16:9': { aspectRatio: '16/9', objectFit: 'cover' },
+      '4:3': { aspectRatio: '4/3', objectFit: 'cover' },
+      '21:9': { aspectRatio: '21/9', objectFit: 'cover' },
+      '1:1': { aspectRatio: '1/1', objectFit: 'cover' },
+    }
+    return ratioMap[aspectRatio] || { objectFit: 'contain' }
+  }, [aspectRatio])
 
   // Zoom
   const handleZoom = useCallback((delta) => {
-    setZoomLevel(prev => Math.max(50, Math.min(200, prev + delta)))
-    showOSD(`Zoom: ${zoomLevel + delta}%`)
-  }, [zoomLevel, showOSD])
+    setZoomLevel(prev => {
+      const next = Math.max(50, Math.min(200, prev + delta))
+      showOSD(`Zoom: ${next}%`)
+      return next
+    })
+  }, [showOSD])
 
   // Screenshot
   const handleScreenshot = useCallback(() => {
@@ -372,14 +567,20 @@ const VideoPlayer = forwardRef(({
 
   // Subtitle controls
   const toggleSubtitles = useCallback(() => {
-    setSubtitleEnabled(prev => !prev)
-    showOSD(!subtitleEnabled ? 'Subtitles On' : 'Subtitles Off')
-  }, [subtitleEnabled, showOSD])
+    setSubtitleEnabled(prev => {
+      const next = !prev
+      showOSD(next ? 'Subtitles On' : 'Subtitles Off')
+      return next
+    })
+  }, [showOSD])
 
   const handleSubtitleDelay = useCallback((delta) => {
-    setSubtitleDelay(prev => prev + delta)
-    showOSD(`Subtitle Delay: ${subtitleDelay + delta > 0 ? '+' : ''}${(subtitleDelay + delta) / 1000}s`)
-  }, [subtitleDelay, showOSD])
+    setSubtitleDelay(prev => {
+      const next = prev + delta
+      showOSD(`Subtitle Delay: ${next > 0 ? '+' : ''}${next / 1000}s`)
+      return next
+    })
+  }, [showOSD])
 
   const handleSubtitleSizeChange = useCallback((delta) => {
     setSubtitleFontSize(prev => Math.max(12, Math.min(32, prev + delta)))
@@ -414,9 +615,8 @@ const VideoPlayer = forwardRef(({
   const remainingTime = duration - currentTime
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
   const bufferedPercent = duration > 0 ? (buffered / duration) * 100 : 0
-  const completionPercent = duration > 0 ? Math.round((currentTime / duration) * 100) : 0
+  const completionPercent = duration > 0 ? Math.round((currentTime / duration) * 1000) / 10 : 0
 
-  const handleWheel = useCallback((e) => { e.preventDefault(); adjustVolume(e.deltaY > 0 ? -0.05 : 0.05) }, [adjustVolume])
   const handleMouseMove = useCallback(() => resetHideTimer(), [resetHideTimer])
   if (!src) {
     return (
@@ -441,15 +641,16 @@ const VideoPlayer = forwardRef(({
       className={`vlc-player ${isFullscreen ? 'fullscreen' : ''} ${!showControls ? 'hide-controls' : ''} ${!showCursor ? 'hide-cursor' : ''}`}
       onMouseMove={handleMouseMove}
       onContextMenu={handleContextMenu}
-      onWheel={handleWheel}
       onClick={closeContextMenu}
     >
       <video
         ref={videoRef}
         src={src}
-        className="vlc-video"
+        className={`vlc-video ${aspectRatio !== 'default' ? 'vlc-video-aspect' : ''}`}
+        style={aspectRatio !== 'default' ? getAspectStyle() : {}}
         onClick={isPlaying ? handlePause : handlePlay}
         onDoubleClick={toggleFullscreen}
+        preload="auto"
       />
 
       {/* OSD Message */}
@@ -463,7 +664,16 @@ const VideoPlayer = forwardRef(({
         <div className="vlc-top-right">
           <button className="vlc-icon-btn" onClick={() => setShowInfoPanel(true)} title="Info"><Info size={16} /></button>
           <button className="vlc-icon-btn" onClick={togglePiP} title="Picture in Picture"><PictureInPicture2 size={16} /></button>
-          <button className="vlc-icon-btn" onClick={() => setShowSpeedMenu(!showSpeedMenu)} title="Speed"><Subtitles size={16} /></button>
+          <div className="vlc-speed-badge-container">
+            <button className="vlc-speed-badge" onClick={() => setShowSpeedMenu(!showSpeedMenu)} title="Playback Speed">
+              {playbackSpeed}×
+            </button>
+          </div>
+          {!isFullscreen && (
+            <button className={`vlc-icon-btn ${subtitleEnabled ? 'active' : ''}`} onClick={() => setShowSubtitleMenu(!showSubtitleMenu)} title="Subtitles (C)">
+              <Subtitles size={16} />
+            </button>
+          )}
           <button className="vlc-icon-btn vlc-close" onClick={handleStop} title="Close"><X size={16} /></button>
         </div>
       </div>
@@ -489,19 +699,48 @@ const VideoPlayer = forwardRef(({
               {isPlaying ? <Pause size={22} /> : <Play size={22} />}
             </button>
             <button className="vlc-icon-btn" onClick={skipForward} title="Next (L)"><SkipForward size={18} /></button>
-            <button className="vlc-icon-btn" onClick={handleStop} title="Stop (S)"><Square size={18} /></button>
+            {sessionStopped && !activeSession ? (
+              <button className="vlc-icon-btn" onClick={handleReplay} title="Replay (R)"><RotateCcw size={18} /></button>
+            ) : (
+              <button className="vlc-icon-btn" onClick={handleStop} disabled={!activeSession} title="Stop (S)"><Square size={18} /></button>
+            )}
             <span className="vlc-time">{formatTime(currentTime)} <span className="vlc-time-sep">/</span> {formatTime(duration)}</span>
           </div>
           <div className="vlc-controls-right">
+            <button
+              className={`vlc-icon-btn ${autoHideControls ? 'active' : ''}`}
+              onClick={toggleAutoHide}
+              title={autoHideControls ? 'Auto-hide controls ON (click to disable)' : 'Auto-hide controls OFF (click to enable)'}
+            >
+              {autoHideControls ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
             <button className={`vlc-icon-btn ${isLooping ? 'active' : ''}`} onClick={toggleLoop} title="Loop">
               <Repeat size={16} />
             </button>
-            <span className="vlc-speed-badge">{playbackSpeed}x</span>
+            <div className="vlc-speed-badge-container">
+              <button className="vlc-speed-badge" onClick={() => setShowSpeedMenu(!showSpeedMenu)} title="Playback Speed">
+                {playbackSpeed}×
+              </button>
+            </div>
             <div className="vlc-volume-container">
               <button className="vlc-icon-btn" onClick={toggleMute} title="Mute (M)">
                 {isMuted || volume === 0 ? <VolumeX size={18} /> : volume < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />}
               </button>
-              <input type="range" className="vlc-volume-slider" min="0" max="2" step="0.01" value={isMuted ? 0 : volume} onChange={handleVolumeChange} />
+              <div className="vlc-volume-slider-wrapper">
+                <div className="vlc-volume-track">
+                  <div className="vlc-volume-fill" style={{ width: `${(isMuted ? 0 : volume) / 2 * 100}%` }} />
+                  <input
+                    type="range"
+                    className="vlc-volume-slider"
+                    min="0"
+                    max="2"
+                    step="0.01"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeChange}
+                  />
+                </div>
+                <span className="vlc-volume-percent">{Math.round((isMuted ? 0 : volume) * 100)}%</span>
+              </div>
             </div>
             <button className="vlc-icon-btn" onClick={handleScreenshot} title="Screenshot"><Camera size={16} /></button>
             <div className="vlc-menu-container">
@@ -514,9 +753,11 @@ const VideoPlayer = forwardRef(({
                 </div>
               )}
             </div>
-             <button className={`vlc-icon-btn ${subtitleEnabled ? 'active' : ''}`} onClick={() => setShowSubtitleMenu(!showSubtitleMenu)} title="Subtitles (C)">
-              <Subtitles size={16} />
-            </button>
+             {isFullscreen && (
+               <button className={`vlc-icon-btn ${subtitleEnabled ? 'active' : ''}`} onClick={() => setShowSubtitleMenu(!showSubtitleMenu)} title="Subtitles (C)">
+                 <Subtitles size={16} />
+               </button>
+             )}
              <button className="vlc-icon-btn" onClick={toggleFullscreen} title="Fullscreen (F)">
               {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
             </button>
@@ -542,10 +783,32 @@ const VideoPlayer = forwardRef(({
       {showSpeedMenu && (
         <div className="vlc-speed-menu" onClick={e => e.stopPropagation()}>
           {speeds.map(s => (
-            <button key={s} className={`vlc-speed-item ${s === playbackSpeed ? 'active' : ''}`} onClick={() => { setPlaybackSpeed(s); setShowSpeedMenu(false); showOSD(`Speed: ${s}x`) }}>
-              {s}x
+            <button key={s} className={`vlc-speed-item ${s === playbackSpeed && !showCustomInput ? 'active' : ''}`} onClick={() => { setPlaybackSpeed(s); setShowCustomInput(false); setShowSpeedMenu(false); showOSD(`Speed: ${s}x`) }}>
+              {s}×
             </button>
           ))}
+          <div className="vlc-speed-separator" />
+          <button className={`vlc-speed-item ${showCustomInput ? 'active' : ''}`} onClick={() => { setShowCustomInput(!showCustomInput); setCustomSpeed(playbackSpeed.toString()) }}>
+            Custom Speed
+          </button>
+          {showCustomInput && (
+            <div className="vlc-custom-speed">
+              <button className="vlc-speed-adjust" onClick={() => adjustCustomSpeed(-0.05)}>−</button>
+              <input
+                type="number"
+                className="vlc-speed-input"
+                min="0.1"
+                max="4"
+                step="0.05"
+                value={customSpeed}
+                onChange={e => { setCustomSpeed(e.target.value); applyCustomSpeed(e.target.value) }}
+                onKeyDown={e => { if (e.key === 'Enter') applyCustomSpeed(customSpeed) }}
+                placeholder="1.0"
+                autoFocus
+              />
+              <button className="vlc-speed-adjust" onClick={() => adjustCustomSpeed(0.05)}>+</button>
+            </div>
+          )}
         </div>
       )}
 
