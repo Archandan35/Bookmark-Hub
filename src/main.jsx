@@ -13,8 +13,27 @@ createRoot(document.getElementById('root')).render(
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sw.js', { updateViaCache: 'none' })
+      .then((registration) => {
+        registration.update()
+        registration.addEventListener('updatefound', () => {
+          const installing = registration.installing
+          if (!installing) return
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              installing.postMessage('skipWaiting')
+            }
+          })
+        })
+      })
       .catch(() => {})
+
+    let refreshing = false
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return
+      refreshing = true
+      window.location.reload()
+    })
   })
 }
 

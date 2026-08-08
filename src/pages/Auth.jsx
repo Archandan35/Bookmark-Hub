@@ -201,6 +201,7 @@ export function Auth() {
                   label="Email, Username or Phone"
                   icon={Mail}
                   placeholder="Enter email, username or phone"
+                  autoComplete="username"
                   error={errors.identifier?.message}
                   {...register('identifier', {
                     required: 'This field is required',
@@ -280,7 +281,7 @@ export function Auth() {
                 </>
               )}
 
-              <Button variant="primary" size="lg" className="auth-submit" disabled={loading}>
+              <Button type="submit" variant="primary" size="lg" className="auth-submit" disabled={loading}>
                 {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
                 {!loading && <ArrowRight size={18} />}
               </Button>

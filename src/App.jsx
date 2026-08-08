@@ -43,10 +43,11 @@ export default function App() {
             setShowSetup(true)
           }
         } else {
-          const session = await AuthService.getSession()
-          if (session?.data?.session) {
-            setSession(session.data.session)
-            setUser(session.data.session.user)
+          const result = await AuthService.getSession()
+          const session = result?.session ?? result?.data?.session
+          if (session) {
+            setSession(session)
+            setUser(session.user)
           }
         }
       } catch (err) {
