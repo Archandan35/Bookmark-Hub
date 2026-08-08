@@ -28,7 +28,7 @@ export const StudySessionRepository = {
       .from(TABLE)
       .select('*')
       .eq('user_id', userId)
-      .eq('status', 'running')
+      .eq('status', 'active')
       .single()
     if (error && error.code !== 'PGRST116') throw error
     return data
@@ -66,23 +66,23 @@ export const StudySessionRepository = {
     return data
   },
 
-  async stop(id, totalDuration) {
+  async stop(id, elapsedSeconds) {
     return this.update(id, {
-      status: 'stopped',
+      status: 'completed',
       ended_at: new Date().toISOString(),
-      total_duration: totalDuration,
+      elapsed_seconds: elapsedSeconds,
     })
   },
 
-  async pause(id, totalDuration) {
+  async pause(id, elapsedSeconds) {
     return this.update(id, {
       status: 'paused',
-      total_duration: totalDuration,
+      elapsed_seconds: elapsedSeconds,
     })
   },
 
   async resume(id) {
-    return this.update(id, { status: 'running' })
+    return this.update(id, { status: 'active' })
   },
 
   async getDailyStats(userId, date) {
@@ -97,7 +97,7 @@ export const StudySessionRepository = {
       .eq('user_id', userId)
       .gte('started_at', startOfDay.toISOString())
       .lte('started_at', endOfDay.toISOString())
-      .neq('status', 'running')
+      .neq('status', 'active')
     if (error) throw error
     return data || []
   },
@@ -113,7 +113,7 @@ export const StudySessionRepository = {
       .eq('user_id', userId)
       .gte('started_at', start.toISOString())
       .lt('started_at', end.toISOString())
-      .neq('status', 'running')
+      .neq('status', 'active')
     if (error) throw error
     return data || []
   },

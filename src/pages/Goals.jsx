@@ -1,331 +1,190 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
-  Target, Calendar, Clock, Check, Flag, Plus,
-  TrendingUp, Award, BarChart2, Grid3X3, List,
+  Target, Plus, Flag, CheckCircle, Clock,
+  GraduationCap, BookOpen, PlayCircle, Heart,
+  Code, TrendingUp,
+  MoreHorizontal, ArrowRight,
 } from 'lucide-react'
-import { Card } from '../components/Card'
-import { Button } from '../components/Button'
-import { Badge } from '../components/Badge'
-import { ProgressBar } from '../components/ProgressBar'
-import { Input } from '../components/Input'
-import { Select } from '../components/Select'
-import { Tabs } from '../components/Tabs'
-import { emptyState } from '../components/EmptyState'
 import { useAuthStore } from '../hooks/useStore'
 
 export function Goals() {
   const { user } = useAuthStore()
-  const [goals, setGoals] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateGoal, setShowCreateGoal] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
-  const [filterType, setFilterType] = useState('all')
+  const [selectedDay, setSelectedDay] = useState(6)
 
-  useEffect(() => {
-    if (user) {
-      loadGoals()
-    }
-  }, [user])
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'all-goals', label: 'All Goals' },
+    { id: 'daily-goals', label: 'Daily Goals' },
+    { id: 'milestones', label: 'Milestones' },
+    { id: 'archived', label: 'Archived' },
+  ]
 
-  const loadGoals = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch(`/api/goals?userId=${user.id}`)
-      const data = await response.json()
-      setGoals(data)
-    } catch (error) {
-      console.error('Failed to load goals:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const statCards = [
+    { id: 'total', label: 'Total Goals', value: '7', caption: 'Active goals', link: 'View all goals', icon: Flag, iconBg: '#E6F1FE', iconColor: '#3B82F6', isRing: false },
+    { id: 'progress', label: 'Overall Progress', value: '68%', caption: 'Average progress', link: 'View progress', icon: null, iconBg: '#E5F6EF', iconColor: '#10B981', isRing: true },
+    { id: 'completed', label: 'Goals Completed', value: '12', caption: 'Completed goals', link: 'View completed', icon: CheckCircle, iconBg: '#EFEAFC', iconColor: '#8B5CF6', isRing: false },
+    { id: 'study-time', label: 'Total Study Time', value: '48h 35m', caption: 'Time towards goals', link: 'View sessions', icon: Clock, iconBg: '#FFF1E0', iconColor: '#F59E0B', isRing: false },
+  ]
 
-  const createGoal = async (goalData) => {
-    try {
-      const response = await fetch('/api/goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...goalData, userId: user.id }),
-      })
-      const newGoal = await response.json()
-      setGoals([newGoal, ...goals])
-      return newGoal
-    } catch (error) {
-      console.error('Failed to create goal:', error)
-      throw error
-    }
-  }
+  const activeGoals = [
+    { id: 1, title: 'UGC NET 2025 Preparation', description: 'Complete syllabus and crack UGC NET exam', icon: GraduationCap, iconBg: '#E6F1FE', iconColor: '#3B82F6', progress: 75, progressColor: '#3B82F6', badges: [{ label: 'UGC NET', bg: '#E6F1FE', color: '#3B82F6' }, { label: 'Exam', bg: '#EFEAFC', color: '#8B5CF6' }], time: '15h 30m / 20h', timeLabel: 'Study Time', date: 'Jun 30, 2025', dateLabel: 'Target Date' },
+    { id: 2, title: 'React Mastery', description: 'Become expert in React development', icon: BookOpen, iconBg: '#E5F6EF', iconColor: '#10B981', progress: 60, progressColor: '#10B981', badges: [{ label: 'Development', bg: '#E5F6EF', color: '#10B981' }, { label: 'Frontend', bg: '#E6F1FE', color: '#3B82F6' }], time: '12h 20m / 20h', timeLabel: 'Study Time', date: 'Jul 15, 2025', dateLabel: 'Target Date' },
+    { id: 3, title: 'Complete JavaScript Course', description: 'Finish advanced JavaScript course', icon: PlayCircle, iconBg: '#EFEAFC', iconColor: '#8B5CF6', progress: 45, progressColor: '#8B5CF6', badges: [{ label: 'JavaScript', bg: '#FFF1E0', color: '#F59E0B' }, { label: 'Course', bg: '#EFEAFC', color: '#8B5CF6' }], time: '6h 45m / 15h', timeLabel: 'Study Time', date: 'Jun 20, 2025', dateLabel: 'Target Date' },
+    { id: 4, title: 'Read 20 Books', description: 'Read and summarize 20 books this year', icon: BookOpen, iconBg: '#FFF1E0', iconColor: '#F59E0B', progress: 30, progressColor: '#F59E0B', badges: [{ label: 'Reading', bg: '#FDE7F0', color: '#EC4899' }, { label: 'Personal', bg: '#E6F1FE', color: '#3B82F6' }], time: '6 / 20', timeLabel: 'Books', date: 'Dec 31, 2025', dateLabel: 'Target Date' },
+    { id: 5, title: 'Daily Study Habit', description: 'Study at least 2 hours every day', icon: Heart, iconBg: '#FDE7F0', iconColor: '#EC4899', progress: 80, progressColor: '#EC4899', badges: [{ label: 'Habit', bg: '#FDE7F0', color: '#EC4899' }, { label: 'Daily', bg: '#EFEAFC', color: '#8B5CF6' }], time: '64 / 80', timeLabel: 'Days', date: 'Jun 30, 2025', dateLabel: 'Target Date' },
+  ]
 
-  const updateGoal = async (id, updates) => {
-    try {
-      const response = await fetch(`/api/goals/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
-      const updatedGoal = await response.json()
-      setGoals(goals.map(g => g.id === id ? updatedGoal : g))
-      return updatedGoal
-    } catch (error) {
-      console.error('Failed to update goal:', error)
-      throw error
-    }
-  }
-
-  const deleteGoal = async (id) => {
-    try {
-      await fetch(`/api/goals/${id}`, { method: 'DELETE' })
-      setGoals(goals.filter(g => g.id !== id))
-    } catch (error) {
-      console.error('Failed to delete goal:', error)
-    }
-  }
-
-  const stats = useMemo(() => [
-    {
-      icon: Target,
-      label: 'Total Goals',
-      value: goals.length,
-      color: '#2563EB',
-    },
-    {
-      icon: TrendingUp,
-      label: 'Progress',
-      value: `${Math.round((goals.filter(g => g.completed).length / goals.length) * 100) || 0}%`,
-      desc: `${goals.filter(g => g.completed).length} of ${goals.length} completed`,
-      color: '#10B981',
-    },
-    {
-      icon: Check,
-      label: 'Completed',
-      value: goals.filter(g => g.completed).length,
-      color: '#8B5CF6',
-    },
-    {
-      icon: Clock,
-      label: 'Study Time',
-      value: '48h 35m',
-      color: '#F59E0B',
-    },
-  ], [goals])
-
-  const filteredGoals = useMemo(() => {
-    if (filterType === 'all') return goals
-    return goals.filter(g => g.category === filterType)
-  }, [goals, filterType])
-
-  if (loading) {
-    return (
-      <div className="goals-page">
-        <div className="stats-grid">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="stat-card">
-              <div className="skeleton skeleton-text" style={{ width: '48px', height: '48px', borderRadius: '50%' }} />
-              <div className="card-body">
-                <div className="skeleton skeleton-title" />
-                <div className="skeleton skeleton-text" />
-                <div className="skeleton skeleton-text" />
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
+  const categories = [
+    { id: 1, name: 'Exam Preparation', count: '3 Goals', icon: GraduationCap, iconBg: '#E6F1FE', iconColor: '#3B82F6' },
+    { id: 2, name: 'Development', count: '2 Goals', icon: Code, iconBg: '#E5F6EF', iconColor: '#10B981' },
+    { id: 3, name: 'Personal Growth', count: '1 Goal', icon: TrendingUp, iconBg: '#FFF1E0', iconColor: '#F59E0B' },
+    { id: 4, name: 'Reading', count: '1 Goal', icon: BookOpen, iconBg: '#EFEAFC', iconColor: '#8B5CF6' },
+  ]
 
   return (
     <div className="goals-page">
-      <div className="page-header">
-        <div className="page-header-left">
-          <div className="page-icon">
-            <Target size={48} />
-          </div>
-          <div className="page-title-section">
-            <h1 className="page-title">Goals</h1>
-            <p className="page-subtitle">
-              Set goals, track progress and achieve more every day.
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={() => setShowCreateGoal(true)}
-        >
-          <Plus size={20} /> Create Goal
-        </Button>
-      </div>
-
-      <div className="navigation-tabs">
-        <Tabs
-          tabs={[
-            { id: 'overview', label: 'Overview', icon: BarChart2 },
-            { id: 'all-goals', label: 'All Goals', icon: Target },
-            { id: 'daily', label: 'Daily Goals', icon: Calendar },
-            { id: 'milestones', label: 'Milestones', icon: Flag },
-            { id: 'archived', label: 'Archived', icon: Award },
-          ]}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
-      </div>
-
-      <div className="stats-grid">
-        {stats.map((stat) => (
-          <Card key={stat.label} hover className="stat-card">
-            <div className="stat-card-icon" style={{ '--icon-bg': `${stat.color}15`, '--icon-color': stat.color }}>
-              <stat.icon size={24} />
+      <div className="goals-content">
+        {/* Page Header */}
+        <div className="goals-header">
+          <div className="goals-header-left">
+            <div className="goals-header-icon">
+              <Target size={24} />
             </div>
-            <div className="stat-card-content">
-              <p className="stat-card-label">{stat.label}</p>
-              <p className="stat-card-value">{stat.value}</p>
-              {stat.desc && <p className="stat-card-desc">{stat.desc}</p>}
+            <div className="goals-header-text">
+              <h1 className="goals-page-title">Goals</h1>
+              <p className="goals-page-subtitle">Set goals, track progress and achieve more every day.</p>
             </div>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="active-goals-card">
-        <div className="card-header">
-          <h2 className="card-title">Active Goals ({filteredGoals.filter(g => !g.completed).length})</h2>
+          </div>
+          <button className="goals-create-btn">
+            <Plus size={16} />
+            <span>Create New Goal</span>
+          </button>
         </div>
-        <div className="goal-categories">
-          {['Exam', 'Development', 'Personal', 'Reading', 'JavaScript', 'Habit'].map((category) => (
-            <Card key={category} className="category-card">
-              <div className="category-icon">
-                <Target size={40} />
-              </div>
-              <div className="category-content">
-                <p className="category-title">{category}</p>
-                <p className="category-count">
-                  {goals.filter(g => g.category === category.toLowerCase()).length} goals
-                </p>
-              </div>
-            </Card>
+
+        {/* Tabs */}
+        <div className="goals-tabs">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`goals-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+              type="button"
+            >
+              {tab.label}
+            </button>
           ))}
         </div>
 
-        <div className="goals-list">
-          {filteredGoals.filter(g => !g.completed).length === 0 ? (
-            <div className="empty-state">
-              <emptyState
-                icon={Target}
-                title="No active goals"
-                description="Create your first goal to get started"
-                action={() => setShowCreateGoal(true)}
-                actionLabel="Create Goal"
-              />
+        {/* Stat Cards */}
+        <div className="goals-stat-cards">
+          {statCards.map((card) => (
+            <div key={card.id} className="goals-stat-card">
+              <div className="goals-stat-icon" style={{ backgroundColor: card.iconBg }}>
+                {card.isRing ? (
+                  <ProgressRingSVG percent={68} color={card.iconColor} />
+                ) : (
+                  <card.icon size={20} style={{ color: card.iconColor }} />
+                )}
+              </div>
+              <span className="goals-stat-label">{card.label}</span>
+              <span className="goals-stat-value">{card.value}</span>
+              <span className="goals-stat-caption">{card.caption}</span>
+              <a href="#" className="goals-stat-link">{card.link} <ArrowRight size={12} /></a>
             </div>
-          ) : (
-            filteredGoals.filter(g => !g.completed).map((goal) => (
-              <div key={goal.id} className="goal-row">
-                <div className="goal-row-content">
-                  <div className="goal-row-left">
-                    <div className="goal-icon" style={{ backgroundColor: goal.color || '#2563EB' }}>
-                      <Target size={24} />
-                    </div>
-                    <div className="goal-info">
-                      <h3 className="goal-title">{goal.title}</h3>
-                      <p className="goal-subtitle">{goal.description}</p>
-                      <div className="goal-tags">
-                        {goal.tags?.map(tag => (
-                          <span key={tag} className="tag" style={{
-                            backgroundColor: tagColors[tag]?.background || '#DBEAFE',
-                            color: tagColors[tag]?.text || '#2563EB',
-                          }}>
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="progress-bar-container">
-                        <div className="progress-bar-track">
-                          <div
-                            className="progress-bar-fill"
-                            style={{
-                              width: `${goal.progress}%`,
-                              backgroundColor: goal.progress >= 100 ? '#10B981' : goal.color || '#2563EB',
-                            }}
-                          />
-                        </div>
-                        <span className="progress-text">{goal.progress}%</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="goal-row-right">
-                    <div className="goal-stats">
-                      <div className="goal-stat">
-                        <Clock size={16} />
-                        <span>{goal.studyTime}</span>
-                      </div>
-                      <div className="goal-stat">
-                        <Target size={16} />
-                        <span>{goal.targetDate}</span>
-                      </div>
-                    </div>
-                    <button className="goal-more-menu">
-                      <More size={20} />
-                    </button>
+          ))}
+        </div>
+
+        {/* Active Goals */}
+        <div className="goals-card goals-active-card">
+          <div className="goals-card-header">
+            <h3 className="goals-card-title">Active Goals (5)</h3>
+          </div>
+          <div className="goals-active-list">
+            {activeGoals.map((goal) => (
+              <div key={goal.id} className="goals-goal-row">
+                <div className="goals-goal-icon" style={{ backgroundColor: goal.iconBg, color: goal.iconColor }}>
+                  <goal.icon size={22} />
+                </div>
+                <div className="goals-goal-content">
+                  <span className="goals-goal-title">{goal.title}</span>
+                  <span className="goals-goal-desc">{goal.description}</span>
+                  <div className="goals-goal-badges">
+                    {goal.badges.map((badge, i) => (
+                      <span key={i} className="goals-badge" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span>
+                    ))}
                   </div>
                 </div>
-                <div className="goal-divider" />
+                <div className="goals-goal-progress">
+                  <div className="goals-progress-track">
+                    <div className="goals-progress-fill" style={{ width: `${goal.progress}%`, backgroundColor: goal.progressColor }} />
+                  </div>
+                  <span className="goals-progress-label">{goal.progress}%</span>
+                </div>
+                <div className="goals-goal-meta">
+                  <div className="goals-meta-stack">
+                    <span className="goals-meta-bold">{goal.time}</span>
+                    <span className="goals-meta-muted">{goal.timeLabel}</span>
+                  </div>
+                  <div className="goals-meta-stack">
+                    <span className="goals-meta-bold">{goal.date}</span>
+                    <span className="goals-meta-muted">{goal.dateLabel}</span>
+                  </div>
+                </div>
+                <button className="goals-goal-menu"><MoreHorizontal size={16} /></button>
               </div>
-            ))
-          )}
-        </div>
-
-        {filteredGoals.filter(g => !g.completed).length > 0 && (
-          <div className="create-goal-link">
-            <button className="create-goal-btn">
-              <Plus size={16} /> Create New Goal
-            </button>
+            ))}
           </div>
-        )}
-      </Card>
-
-      {showCreateGoal && (
-        <div className="modal-overlay">
-          <Card className="goal-form-modal">
-            <div className="modal-header">
-              <h2>Create New Goal</h2>
-              <button onClick={() => setShowCreateGoal(false)}>×</button>
-            </div>
-            <form className="goal-form">
-              <Input label="Goal Title" placeholder="Enter goal title" required />
-              <Input label="Description" placeholder="Describe your goal" />
-              <Select label="Category" options={[
-                { value: 'exam', label: 'Exam' },
-                { value: 'development', label: 'Development' },
-                { value: 'personal', label: 'Personal' },
-                { value: 'reading', label: 'Reading' },
-                { value: 'javascript', label: 'JavaScript' },
-                { value: 'habit', label: 'Habit' },
-              ]} />
-              <div className="form-row">
-                <Input label="Target Date" type="date" />
-                <Input label="Study Time (hours)" type="number" />
-              </div>
-              <div className="form-actions">
-                <Button variant="ghost" onClick={() => setShowCreateGoal(false)}>Cancel</Button>
-                <Button variant="primary" type="submit">Create Goal</Button>
-              </div>
-            </form>
-          </Card>
+          <div className="goals-card-footer">
+            <a href="#" className="goals-footer-link"><Plus size={16} /> Create New Goal</a>
+          </div>
         </div>
-      )}
+
+        {/* Goal Categories */}
+        <div className="goals-card goals-categories-card">
+          <div className="goals-card-header">
+            <h3 className="goals-card-title">Goal Categories</h3>
+          </div>
+          <div className="goals-categories-grid">
+            {categories.map((cat) => (
+              <div key={cat.id} className="goals-category-chip">
+                <div className="goals-category-icon" style={{ backgroundColor: cat.iconBg, color: cat.iconColor }}>
+                  <cat.icon size={20} />
+                </div>
+                <div className="goals-category-text">
+                  <span className="goals-category-name">{cat.name}</span>
+                  <span className="goals-category-count">{cat.count}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
-const tagColors = {
-  'ugc net': { background: '#DBEAFE', text: '#2563EB' },
-  'exam': { background: '#EDE9FE', text: '#7C3AED' },
-  'development': { background: '#DCFCE7', text: '#16A34A' },
-  'frontend': { background: '#ECFDF5', text: '#059669' },
-  'javascript': { background: '#F3E8FF', text: '#8B5CF6' },
-  'reading': { background: '#FFF7ED', text: '#EA580C' },
-  'habit': { background: '#FCE7F3', text: '#DB2777' },
+
+function ProgressRingSVG({ percent, color }) {
+  const size = 20
+  const stroke = 3
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  const dashLength = (percent / 100) * circumference
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#D9DEE7" strokeWidth={stroke} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </svg>
+  )
 }
-const More = (props) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
-  </svg>
-)

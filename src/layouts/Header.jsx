@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Bell, Settings, Moon, Sun, LogOut, User, Star, Menu, X, Check,
+  Plus, Bell, Settings, Moon, Sun, LogOut, User, Star, Menu, X,
 } from 'lucide-react'
 import { Button } from '../components/Button'
 import { SearchBar } from '../components/SearchBar'

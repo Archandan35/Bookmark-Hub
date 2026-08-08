@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 
 export function VirtualGrid({ items, renderItem, minItemWidth = 280, gap = 24, overscan = 3, className }) {
   const containerRef = useRef(null)

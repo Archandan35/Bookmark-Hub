@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  BookOpen, Bookmark, FolderOpen, Video, FileText, StickyNote,
-  Clock, TrendingUp, Target, Grid3X3, List, Plus,
+  Bookmark, FolderOpen, Video, FileText, StickyNote,
+  Clock, Target, Grid3X3, List, Plus,
 } from 'lucide-react'
 import { Card } from '../components/Card'
 import { BookmarkCard } from '../components/BookmarkCard'
@@ -60,8 +60,8 @@ export function Dashboard() {
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
-    const todaySessions = sessions.filter((s) => s.started_at?.startsWith(today) && s.status === 'stopped')
-    const todayDuration = todaySessions.reduce((sum, s) => sum + (s.total_duration || 0), 0)
+    const todaySessions = sessions.filter((s) => (s.startTime || s.started_at)?.startsWith(today) && (s.status === 'completed' || s.status === 'stopped'))
+    const todayDuration = todaySessions.reduce((sum, s) => sum + (s.elapsedSeconds || s.elapsed_seconds || s.total_duration || 0), 0)
     const todayMinutes = Math.floor(todayDuration / 60)
     const goalMinutes = 240
     const goalPercent = Math.min(100, Math.round((todayMinutes / goalMinutes) * 100))

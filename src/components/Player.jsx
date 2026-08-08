@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Play, Pause, StopCircle, SkipBack, SkipForward, Volume2, VolumeX,
-  Maximize, Minimize, Settings, PauseCircle, PlayCircle,
+  Maximize, Minimize, Settings, PlayCircle,
   RotateCcw, FastForward, Rewind, Repeat, Shuffle,
 } from 'lucide-react'
 import { Button } from './Button'

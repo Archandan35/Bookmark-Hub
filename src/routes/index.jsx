@@ -5,12 +5,14 @@ import { Auth } from '../pages/Auth'
 import { Skeleton } from '../components/Skeleton'
 
 const Dashboard = lazy(() => import('../pages/Dashboard').then((m) => ({ default: m.Dashboard })))
+const Statistics = lazy(() => import('../pages/Statistics').then((m) => ({ default: m.Statistics })))
 const Bookmarks = lazy(() => import('../pages/Bookmarks').then((m) => ({ default: m.Bookmarks })))
 const Collections = lazy(() => import('../pages/Collections').then((m) => ({ default: m.Collections })))
-const StudySessions = lazy(() => import('../pages/StudySessions').then((m) => ({ default: m.StudySessions })))
+const Learn = lazy(() => import('../pages/Learn').then((m) => ({ default: m.Learn })))
 const Settings = lazy(() => import('../pages/Settings').then((m) => ({ default: m.Settings })))
 const Trash = lazy(() => import('../pages/Trash').then((m) => ({ default: m.Trash })))
 const Goals = lazy(() => import('../pages/Goals').then((m) => ({ default: m.Goals })))
+
 
 function PageLoader() {
   return (
@@ -60,14 +62,14 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <PageWrapper><Dashboard /></PageWrapper> },
+      { path: 'statistics', element: <PageWrapper><Statistics /></PageWrapper> },
       { path: 'bookmarks', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'favorites', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'pinned', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'recent', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'goals', element: <PageWrapper><Goals /></PageWrapper> },
       { path: 'collections', element: <PageWrapper><Collections /></PageWrapper> },
-      { path: 'study', element: <PageWrapper><StudySessions /></PageWrapper> },
-      { path: 'study-sessions', element: <PageWrapper><StudySessions /></PageWrapper> },
+      { path: 'learn', element: <PageWrapper><Learn /></PageWrapper> },
       { path: 'settings', element: <PageWrapper><Settings /></PageWrapper> },
       { path: 'trash', element: <PageWrapper><Trash /></PageWrapper> },
     ],

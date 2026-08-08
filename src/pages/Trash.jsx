@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Trash2, RotateCcw } from 'lucide-react'
 import { Button } from '../components/Button'
 import { EmptyState } from '../components/EmptyState'
 import { Card } from '../components/Card'

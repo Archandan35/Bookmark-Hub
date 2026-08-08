@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Bookmark, Heart, Pin, Clock, Trash2, FolderOpen,
   Globe, FileText, Video, Music, FileCode, Image, Code, Archive,
-  StickyNote, Star, Calendar, Target,
+  StickyNote, Star, Target, BarChart2, BookOpen,
 } from 'lucide-react'
 
 export const BOOKMARK_TYPES = {
@@ -48,13 +48,6 @@ export const VIEW_MODES = {
   LIST: 'list',
 }
 
-export const STUDY_STATUS = {
-  IDLE: 'idle',
-  RUNNING: 'running',
-  PAUSED: 'paused',
-  STOPPED: 'stopped',
-}
-
 export const THEME_MODES = {
   LIGHT: 'light',
   DARK: 'dark',
@@ -63,12 +56,13 @@ export const THEME_MODES = {
 
 export const SIDEBAR_NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { id: 'statistics', label: 'Statistics', icon: BarChart2, path: '/statistics' },
   { id: 'bookmarks', label: 'All Bookmarks', icon: Bookmark, path: '/bookmarks' },
   { id: 'favorites', label: 'Favorites', icon: Heart, path: '/favorites' },
   { id: 'pinned', label: 'Pinned', icon: Pin, path: '/pinned' },
   { id: 'recent', label: 'Recent', icon: Clock, path: '/recent' },
   { id: 'goals', label: 'Goals', icon: Target, path: '/goals' },
-  { id: 'study-sessions', label: 'Study Sessions', icon: Calendar, path: '/study-sessions' },
+  { id: 'learn', label: 'Learn', icon: BookOpen, path: '/learn' },
   { id: 'trash', label: 'Trash', icon: Trash2, path: '/trash' },
 ]
 

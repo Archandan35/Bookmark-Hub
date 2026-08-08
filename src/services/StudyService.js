@@ -10,20 +10,23 @@ export const StudyService = {
     return StudySessionRepository.getActive(userId)
   },
 
-  async startSession(userId, bookmarkId, bookmarkTitle) {
+  async startSession(userId, bookmarkId, bookmarkTitle, folderName = 'Unknown Folder') {
     const active = await StudySessionRepository.getActive(userId)
     if (active) {
-      await StudySessionRepository.stop(active.id, active.total_duration || 0)
+      await StudySessionRepository.stop(active.id, active.elapsed_seconds || 0)
     }
     const session = {
       id: generateId(),
       user_id: userId,
       bookmark_id: bookmarkId,
       bookmark_title: bookmarkTitle,
-      status: 'running',
+      folder_name: folderName,
+      status: 'active',
       started_at: new Date().toISOString(),
       ended_at: null,
       total_duration: 0,
+      elapsed_seconds: 0,
+      completion_percent: 0,
       notes: '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -43,6 +46,13 @@ export const StudyService = {
     return StudySessionRepository.stop(id, totalDuration)
   },
 
+  async updateProgress(id, elapsedSeconds, completionPercent) {
+    return StudySessionRepository.update(id, {
+      elapsed_seconds: elapsedSeconds,
+      completion_percent: completionPercent,
+    })
+  },
+
   async updateNotes(id, notes) {
     return StudySessionRepository.update(id, { notes })
   },
@@ -60,7 +70,7 @@ export const StudyService = {
   },
 
   calculateTotalDuration(sessions) {
-    return sessions.reduce((total, s) => total + (s.total_duration || 0), 0)
+    return sessions.reduce((total, s) => total + (s.elapsed_seconds || s.total_duration || 0), 0)
   },
 
   groupByDate(sessions) {

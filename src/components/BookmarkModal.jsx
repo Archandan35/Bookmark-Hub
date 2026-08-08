@@ -3,7 +3,7 @@ import { Modal } from './Modal'
 import { Input, Select, Textarea } from './Input'
 import { Button } from './Button'
 import { BOOKMARK_TYPES, BOOKMARK_TYPE_CONFIG } from '../constants'
-import { X, Image, Upload, XCircle } from 'lucide-react'
+import { Upload, XCircle } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
 const DRAFT_KEY = 'bookmarkhub_add_draft'

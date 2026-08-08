@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Download, Upload, FileJson, FileText } from 'lucide-react'
+import { Upload, FileJson, FileText } from 'lucide-react'
 import { Button } from './Button'
 import { useToast } from './Toast'
 import { cn } from '../utils/helpers'
