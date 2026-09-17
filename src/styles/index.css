@@ -5611,7 +5611,7 @@
 .exam-listrow-sub { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exam-listrow-count { font-size: 14px; font-weight: 800; color: var(--color-primary); white-space: nowrap; flex-shrink: 0; }
 @media (max-width: 768px) {
-  .exam-all-dialog { max-width: 95%; }
+  .exam-all-dialog { max-width: 100%; }
   .exam-all-toolbar { flex-wrap: wrap; }
   .exam-view-toggle { width: 100%; }
 }
@@ -5626,7 +5626,7 @@
    RESPONSIVE � popups, exam counter page, calendar popups
    =========================== */
 @media (max-width: 1100px) {
-  .exam-all-dialog,
+  .exam-all-dialog { max-width: 100%; }
   .exam-schedule-dialog,
   .streak-dialog { max-width: 85%; }
 }
