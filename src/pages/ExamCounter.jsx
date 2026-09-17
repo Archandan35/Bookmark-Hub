@@ -3,7 +3,7 @@ import {
   Plus, Search, CalendarDays, Clock3, Pencil, MoreVertical, Check,
   RotateCcw, Trash2, Eye, Bell, BellOff, ChevronLeft, ChevronRight,
   Timer, ExternalLink, ArrowUpDown, Filter, X, Copy, Flame, Target,
-  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List,
+  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List, Briefcase,
 } from 'lucide-react'
 import { useAuthStore } from '../hooks/useStore'
 import { useExamStore, useExamNow } from '../hooks/useExamStore'
@@ -27,7 +27,7 @@ const EMPTY_FORM = {
   exam_date: '',
   exam_time: '',
   category: '',
-  subject: '',
+  recruiter: '',
   description: '',
   exam_link: '',
   notes: '',
@@ -40,6 +40,62 @@ function formatExamDateShort(dateStr) {
   const d = parseLocalDate(dateStr) || new Date(dateStr)
   if (!d || Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Dropdown with an "Add new" option so users can add their own types. */
+function CreatableSelect({ label, value, options, placeholder, newLabel, onChange }) {
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+  const merged = useMemo(() => {
+    const list = (options || []).filter(Boolean)
+    if (value && !list.includes(value)) return [...list, value]
+    return list
+  }, [options, value])
+
+  const handleSelect = (v) => {
+    if (v === '__new__') {
+      setDraft('')
+      setAdding(true)
+      return
+    }
+    onChange(v)
+  }
+
+  const handleAdd = () => {
+    const name = draft.trim()
+    if (!name) return
+    onChange(name)
+    setAdding(false)
+    setDraft('')
+  }
+
+  return (
+    <div className="input-group">
+      {label && <label className="input-label">{label}</label>}
+      {adding ? (
+        <div className="exam-combo-add">
+          <div className="input-wrapper">
+            <input
+              className="input"
+              value={draft}
+              placeholder={`Enter new ${(label || 'value').toLowerCase()}…`}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }}
+              autoFocus
+            />
+          </div>
+          <Button variant="primary" size="sm" onClick={handleAdd}>Add</Button>
+          <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <select className="input select" value={value || ''} onChange={(e) => handleSelect(e.target.value)}>
+          <option value="">{placeholder || 'Select…'}</option>
+          {merged.map((o) => <option key={o} value={o}>{o}</option>)}
+          <option value="__new__">{newLabel || '+ Add new…'}</option>
+        </select>
+      )}
+    </div>
+  )
 }
 
 function reminderSummary(exam) {
@@ -70,6 +126,7 @@ export function ExamCounter() {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('nearest')
   const [category, setCategory] = useState('all')
+  const [recruiter, setRecruiter] = useState('all')
 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -147,11 +204,17 @@ export function ExamCounter() {
     [exams]
   )
 
+  const recruiters = useMemo(
+    () => [...new Set(exams.map((e) => e.recruiter).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [exams]
+  )
+
   const visible = useMemo(() => {
     let list = filterExams(exams, { query, filter }, now)
     if (category !== 'all') list = list.filter((e) => e.category === category)
+    if (recruiter !== 'all') list = list.filter((e) => e.recruiter === recruiter)
     return sortExams(list, sort)
-  }, [exams, query, filter, category, sort, now])
+  }, [exams, query, filter, category, recruiter, sort, now])
 
   const upcoming = useMemo(
     () => visible.filter((e) => ['upcoming', 'tomorrow', 'today'].includes(e._status)),
@@ -195,6 +258,7 @@ export function ExamCounter() {
   const resetFilters = () => {
     setQuery('')
     setCategory('all')
+    setRecruiter('all')
     setFilter('all')
   }
 
@@ -220,7 +284,7 @@ export function ExamCounter() {
       exam_date: exam.exam_date || '',
       exam_time: exam.exam_time || '',
       category: exam.category || '',
-      subject: exam.subject || '',
+      recruiter: exam.recruiter || '',
       description: exam.description || '',
       exam_link: exam.exam_link || '',
       notes: exam.notes || '',
@@ -256,7 +320,7 @@ export function ExamCounter() {
           exam_date: form.exam_date,
           exam_time: form.exam_time,
           category: form.category,
-          subject: form.subject,
+          recruiter: form.recruiter,
           description: form.description,
           exam_link: form.exam_link,
           notes: form.notes,
@@ -305,7 +369,7 @@ export function ExamCounter() {
         exam_date: exam.exam_date,
         exam_time: exam.exam_time || '',
         category: exam.category || '',
-        subject: exam.subject || '',
+        recruiter: exam.recruiter || '',
         description: exam.description || '',
         exam_link: exam.exam_link || '',
         notes: exam.notes || '',
@@ -372,7 +436,7 @@ export function ExamCounter() {
             <Search size={16} className="exam-search-icon" />
             <input
               className="exam-search-input"
-              placeholder="Search exams by name, subject, category..."
+                placeholder="Search exams by name, recruiter, category..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -387,6 +451,13 @@ export function ExamCounter() {
             <select className="exam-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
               <option value="all">All Categories</option>
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="exam-select-wrap">
+            <Briefcase size={14} />
+            <select className="exam-select" value={recruiter} onChange={(e) => setRecruiter(e.target.value)} aria-label="Filter by recruiter">
+              <option value="all">All Recruiters</option>
+              {recruiters.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
           <div className="exam-select-wrap">
@@ -564,8 +635,22 @@ export function ExamCounter() {
             <Input label="Exam Time" type="time" value={form.exam_time} onChange={(e) => setForm((f) => ({ ...f, exam_time: e.target.value }))} />
           </div>
           <div className="exam-form-row">
-            <Input label="Category" placeholder="e.g. Banking" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
-            <Input label="Subject" placeholder="e.g. Odia" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
+            <CreatableSelect
+              label="Exam Category"
+              value={form.category}
+              options={categories}
+              placeholder="Select category"
+              newLabel="+ Add new category…"
+              onChange={(v) => setForm((f) => ({ ...f, category: v }))}
+            />
+            <CreatableSelect
+              label="Recruiter"
+              value={form.recruiter}
+              options={recruiters}
+              placeholder="Select recruiter"
+              newLabel="+ Add new recruiter…"
+              onChange={(v) => setForm((f) => ({ ...f, recruiter: v }))}
+            />
           </div>
           <Textarea label="Description" placeholder="Syllabus, venue, admit card info…" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           <Input label="Exam / Official Website Link" placeholder="https://…" value={form.exam_link} onChange={(e) => setForm((f) => ({ ...f, exam_link: e.target.value }))} />
@@ -818,6 +903,12 @@ function AllExamsDialog({
   const [filter, setFilter] = useState('upcoming')
   const [sort, setSort] = useState('nearest')
   const [category, setCategory] = useState('all')
+  const [recruiter, setRecruiter] = useState('all')
+
+  const recruiterOptions = useMemo(
+    () => [...new Set(exams.map((e) => e.recruiter).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [exams]
+  )
 
   const counts = useMemo(() => {
     const c = { all: exams.length, upcoming: 0, today: 0, tomorrow: 0, completed: 0, passed: 0 }
@@ -835,8 +926,9 @@ function AllExamsDialog({
   const visible = useMemo(() => {
     let list = filterExams(exams, { query, filter }, now)
     if (category !== 'all') list = list.filter((e) => e.category === category)
+    if (recruiter !== 'all') list = list.filter((e) => e.recruiter === recruiter)
     return sortExams(list, sort)
-  }, [exams, query, filter, category, sort, now])
+  }, [exams, query, filter, category, recruiter, sort, now])
 
   return (
     <Dialog
@@ -856,7 +948,7 @@ function AllExamsDialog({
           <Search size={16} className="exam-search-icon" />
           <input
             className="exam-search-input"
-            placeholder="Search exams by name, subject, category..."
+            placeholder="Search exams by name, recruiter, category..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -871,6 +963,13 @@ function AllExamsDialog({
           <select className="exam-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
             <option value="all">All Categories</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="exam-select-wrap">
+          <Briefcase size={14} />
+          <select className="exam-select" value={recruiter} onChange={(e) => setRecruiter(e.target.value)} aria-label="Filter by recruiter">
+            <option value="all">All Recruiters</option>
+            {recruiterOptions.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
         <div className="exam-select-wrap">
@@ -965,7 +1064,7 @@ function ExamDetails({ exam, now, onEdit }) {
         <div><dt>Time</dt><dd>🕐 {formatExamTime(exam.exam_time)}</dd></div>
         <div><dt>Status</dt><dd><span className={cn('exam-status', meta.className)}>{meta.label}</span></dd></div>
         {exam.category && <div><dt>Category</dt><dd>{exam.category}</dd></div>}
-        {exam.subject && <div><dt>Subject</dt><dd>{exam.subject}</dd></div>}
+        {exam.recruiter && <div><dt>Recruiter</dt><dd>{exam.recruiter}</dd></div>}
         {exam.description && <div><dt>Description</dt><dd className="exam-desc-box">{exam.description}</dd></div>}
         {exam.exam_link && (
           <div><dt>Exam link</dt><dd>

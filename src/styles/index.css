@@ -5844,3 +5844,14 @@ html, body { overflow-x: hidden; overflow-x: clip; }
 @media (min-width: 769px) {
   .header-username { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; display: inline-block; vertical-align: middle; }
 }
+
+/* Creatable dropdown (add-new inline row) */
+.exam-combo-add { display: flex; gap: 8px; align-items: center; }
+.exam-combo-add .input-wrapper { flex: 1; min-width: 0; }
+.exam-combo-add .btn { flex-shrink: 0; }
+
+/* Page toolbar wraps once it holds 4 controls */
+@media (max-width: 1100px) {
+  .exam-toolbar { flex-wrap: wrap; }
+  .exam-toolbar .exam-search { flex: 1 1 100%; }
+}

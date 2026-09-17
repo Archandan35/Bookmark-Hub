@@ -99,7 +99,7 @@ export function filterExams(exams, { query = '', filter = 'all' } = {}, now = ne
 
   if (q) {
     list = list.filter((e) =>
-      [e.exam_name, e.subject, e.category].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+      [e.exam_name, e.recruiter, e.category].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     )
   }
 
@@ -214,7 +214,12 @@ export function formatExamTime(timeStr) {
 export const ExamService = {
   async getAll(userId) {
     try {
-      return await ExamRepository.getAll(userId)
+      const rows = await ExamRepository.getAll(userId)
+      // Forward-compat: rows cached locally before the subject->recruiter rename.
+      return (Array.isArray(rows) ? rows : []).map((e) => ({
+        ...e,
+        recruiter: e.recruiter ?? e.subject ?? '',
+      }))
     } catch {
       return []
     }
@@ -228,7 +233,7 @@ export const ExamService = {
       exam_date: data.exam_date,
       exam_time: data.exam_time || '',
       category: data.category || '',
-      subject: data.subject || '',
+      recruiter: data.recruiter ?? data.subject ?? '',
       description: data.description || '',
       exam_link: data.exam_link || '',
       notes: data.notes || '',

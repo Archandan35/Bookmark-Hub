@@ -1049,13 +1049,13 @@ CREATE TABLE IF NOT EXISTS public.exams (
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     exam_name TEXT NOT NULL,
     exam_date DATE NOT NULL,
-    exam_time TEXT DEFAULT '''',
-    category TEXT DEFAULT '''',
-    subject TEXT DEFAULT '''',
-    description TEXT DEFAULT '''',
-    exam_link TEXT DEFAULT '''',
-    notes TEXT DEFAULT '''',
-    reminder_settings TEXT[] DEFAULT ''{}'',
+    exam_time TEXT DEFAULT '',
+    category TEXT DEFAULT '',
+    recruiter TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    exam_link TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    reminder_settings TEXT[] DEFAULT '{}',
     reminders_enabled BOOLEAN DEFAULT true,
     completed BOOLEAN DEFAULT false,
     completed_at TIMESTAMPTZ,
@@ -1069,5 +1069,45 @@ DROP POLICY IF EXISTS exams_owner ON public.exams;
 CREATE POLICY exams_owner ON public.exams FOR ALL
     USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 INSERT INTO public._schema_version (version, description)
-VALUES (4, ''Exam Counter: exams table with countdown source-of-truth exam_date'')
+VALUES (4, 'Exam Counter: exams table with countdown source-of-truth exam_date')
+ON CONFLICT DO NOTHING;
+
+-- ============================================
+-- 16b. EXAMS GRANTS + TRIGGERS
+-- Must run AFTER the exams table exists: GRANT ALL ON ALL TABLES only
+-- covers tables present at execution time, so the new table needs
+-- explicit grants (critical for re-runs on an existing database).
+-- Idempotent: safe to re-run.
+-- ============================================
+GRANT ALL ON TABLE public.exams TO authenticated;
+
+DROP TRIGGER IF EXISTS trigger_updated_at ON public.exams;
+CREATE TRIGGER trigger_updated_at
+    BEFORE UPDATE ON public.exams
+    FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- ============================================
+-- 17. EXAMS: SUBJECT -> RECRUITER RENAME (Exam Counter labels)
+-- Schema version: 5
+-- Idempotent: renames only when the old column exists, adds the new
+-- column otherwise. Existing data is preserved by the rename.
+-- ============================================
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'exams' AND column_name = 'subject'
+  ) THEN
+    ALTER TABLE public.exams RENAME COLUMN subject TO recruiter;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'exams' AND column_name = 'recruiter'
+  ) THEN
+    ALTER TABLE public.exams ADD COLUMN recruiter TEXT DEFAULT '';
+  END IF;
+END $$;
+
+INSERT INTO public._schema_version (version, description)
+VALUES (5, 'Exams: rename subject column to recruiter')
 ON CONFLICT DO NOTHING;
