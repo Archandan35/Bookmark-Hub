@@ -504,6 +504,7 @@ export function ExamCounter() {
         exams={exams}
         now={now}
         categories={categories}
+        onAdd={openAdd}
         menuOpen={openMenu}
         onMenu={(exam) => setOpenMenu(openMenu === exam.id ? null : exam.id)}
         onToggle={handleToggleComplete}
@@ -809,7 +810,7 @@ function ExamListRow({ exam, now, onToggle, onEdit, onDelete, onDetails }) {
 }
 
 function AllExamsDialog({
-  open, onClose, exams, now, categories,
+  open, onClose, exams, now, categories, onAdd,
   menuOpen, onMenu, onToggle, onEdit, onDetails, onDelete, onRestore, onDuplicate, menuRef,
 }) {
   const [view, setView] = useState('grid')
@@ -844,6 +845,11 @@ function AllExamsDialog({
       title={`Upcoming Exams (${visible.length})`}
       size="lg"
       className="exam-all-dialog"
+      headerActions={
+        <Button variant="primary" size="sm" onClick={onAdd}>
+          <Plus size={14} /> Add Exam
+        </Button>
+      }
     >
       <div className="exam-all-toolbar">
         <div className="exam-search">

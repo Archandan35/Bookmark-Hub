@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { Button } from './Button'
 import { cn } from '../utils/helpers'
 
-export function Dialog({ isOpen, onClose, title, children, footer, size = 'md', showClose = true, className }) {
+export function Dialog({ isOpen, onClose, title, children, footer, size = 'md', showClose = true, className, headerActions }) {
   const dialogRef = useRef(null)
 
   useEffect(() => {
@@ -36,11 +36,14 @@ export function Dialog({ isOpen, onClose, title, children, footer, size = 'md', 
       >
         <div className="dialog-header">
           <h3 className="dialog-title">{title}</h3>
-          {showClose && (
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">
-              <X size={20} />
-            </Button>
-          )}
+          <div className="dialog-header-actions">
+            {headerActions}
+            {showClose && (
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">
+                <X size={20} />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="dialog-body">{children}</div>
         {footer && <div className="dialog-footer">{footer}</div>}

@@ -5724,3 +5724,6 @@
   .theme-options { flex-wrap: wrap; }
   .settings-card { padding: 16px; }
 }
+
+/* Dialog header actions (e.g. Add Exam before the close button) */
+.dialog-header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
