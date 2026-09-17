@@ -3,7 +3,8 @@ import {
   Plus, Search, CalendarDays, Clock3, Pencil, MoreVertical, Check,
   RotateCcw, Trash2, Eye, Bell, BellOff, ChevronLeft, ChevronRight,
   Timer, ExternalLink, ArrowUpDown, Filter, X, Copy, Flame, Target,
-  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List, Briefcase, SlidersHorizontal,
+  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List, Briefcase,
+  SlidersHorizontal, Flower,
 } from 'lucide-react'
 import { useAuthStore } from '../hooks/useStore'
 import { useExamStore, useExamNow } from '../hooks/useExamStore'
@@ -166,6 +167,8 @@ export function ExamCounter() {
 
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [showAll, setShowAll] = useState(false)
+  const [allInitialFilter, setAllInitialFilter] = useState('upcoming')
+  const [showPageFilters, setShowPageFilters] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
   const menuRef = useRef(null)
 
@@ -283,13 +286,6 @@ export function ExamCounter() {
     const gap = parseFloat(getComputedStyle(el).columnGap) || 14
     const step = card ? card.offsetWidth + gap : Math.max(240, el.clientWidth * 0.8)
     el.scrollBy({ left: dir * step, behavior: 'smooth' })
-  }
-
-  const resetFilters = () => {
-    setQuery('')
-    setCategory('all')
-    setRecruiter('all')
-    setFilter('all')
   }
 
   const openDetails = (exam) => {
@@ -476,6 +472,16 @@ export function ExamCounter() {
               </button>
             )}
           </div>
+          <button
+            type="button"
+            className={cn('exam-icon-btn exam-filter-btn', (category !== 'all' || recruiter !== 'all' || sort !== 'nearest') && 'has-active')}
+            onClick={() => setShowPageFilters(true)}
+            aria-label="Open filters"
+            title="Filters"
+          >
+            <SlidersHorizontal size={16} />
+            {(category !== 'all' || recruiter !== 'all' || sort !== 'nearest') && <span className="exam-filter-btn-dot" />}
+          </button>
           <div className="exam-select-wrap">
             <Filter size={14} />
             <select className="exam-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
@@ -520,7 +526,7 @@ export function ExamCounter() {
           <div className="exam-slider-head">
               <h2 className="exam-section-title">Upcoming Exams ({upcoming.length})</h2>
               <div className="exam-slider-controls">
-                <button className="exam-link-btn" onClick={() => setShowAll(true)}>View All</button>
+                <button className="exam-link-btn" onClick={() => { setAllInitialFilter('upcoming'); setShowAll(true) }}>View All</button>
               <button className="exam-icon-btn" onClick={() => slide(upcomingTrackRef, -1)} aria-label="Scroll left"><ChevronLeft size={16} /></button>
               <button className="exam-icon-btn" onClick={() => slide(upcomingTrackRef, 1)} aria-label="Scroll right"><ChevronRight size={16} /></button>
             </div>
@@ -557,8 +563,8 @@ export function ExamCounter() {
             <h2 className="exam-section-title exam-section-title-green">
               <CheckCircle2 size={18} /> Completed Exams ({doneList.length})
             </h2>
-            <div className="exam-slider-controls">
-              <button className="exam-link-btn" onClick={() => { resetFilters(); completedTrackRef.current?.scrollTo({ left: 0, behavior: 'smooth' }) }}>View All</button>
+              <div className="exam-slider-controls">
+                <button className="exam-link-btn" onClick={() => { setAllInitialFilter('completed'); setShowAll(true) }}>View All</button>
               <button className="exam-icon-btn" onClick={() => slide(completedTrackRef, -1)} aria-label="Scroll left"><ChevronLeft size={16} /></button>
               <button className="exam-icon-btn" onClick={() => slide(completedTrackRef, 1)} aria-label="Scroll right"><ChevronRight size={16} /></button>
             </div>
@@ -605,6 +611,7 @@ export function ExamCounter() {
         exams={exams}
         now={now}
         categories={categories}
+        initialFilter={allInitialFilter}
         onAdd={openAdd}
         menuOpen={openMenu}
         onMenu={(exam) => setOpenMenu(openMenu === exam.id ? null : exam.id)}
@@ -615,6 +622,21 @@ export function ExamCounter() {
         onRestore={handleRestore}
         onDuplicate={handleDuplicate}
         menuRef={menuRef}
+      />
+
+      {/* Page filter sheet (mobile: search + filter icon instead of dropdowns) */}
+      <ExamFilterSheet
+        open={showPageFilters}
+        onClose={() => setShowPageFilters(false)}
+        categories={categories}
+        recruiterOptions={recruiters}
+        initial={{ category, recruiter, sort }}
+        onApply={({ category: c, recruiter: r, sort: s }) => {
+          setCategory(c)
+          setRecruiter(r)
+          setSort(s)
+          setShowPageFilters(false)
+        }}
       />
 
       {/* Details modal (also opened from the right panel) */}
@@ -731,7 +753,7 @@ function FeaturedNextExam({ exam, now, onOpen }) {
 
   return (
     <div className="exam-featured">
-      <CalendarDays className="exam-featured-deco" size={220} />
+      <Flower className="exam-featured-deco" size={220} />
       <span className="exam-featured-badge"><Flame size={14} /> Next Exam</span>
       <div className="exam-featured-body">
         <div className="exam-featured-info">
@@ -747,6 +769,17 @@ function FeaturedNextExam({ exam, now, onOpen }) {
           <div className="exam-featured-sub">
             {weekday && <span>{weekday}</span>}
             {tzShort && <span>{tzShort} ({tzName})</span>}
+          </div>
+          <div className="exam-featured-datetime">
+            <div className="exam-featured-dtcol">
+              <span className="exam-featured-dtline"><CalendarDays size={14} /> {formatExamDate(exam.exam_date)}</span>
+              {weekday && <span className="exam-featured-dtsub">{weekday}</span>}
+            </div>
+            <span className="exam-featured-dtsep" />
+            <div className="exam-featured-dtcol">
+              {exam.exam_time && <span className="exam-featured-dtline"><Clock3 size={14} /> {formatExamTime(exam.exam_time)}</span>}
+              <span className="exam-featured-dtsub">{tzShort} {tzName.split('/')[0]}</span>
+            </div>
           </div>
         </div>
         <div className="exam-featured-right">
@@ -787,9 +820,10 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
   const status = exam._status || deriveStatus(exam, now)
   const meta = STATUS_META[status]
   const days = daysLeft(exam, now)
+  const isDone = status === 'completed' || status === 'passed'
 
   return (
-    <div className={cn('exam-card', popup && 'exam-card-popup')} onClick={onDetails} role="button" tabIndex={0}
+    <div className={cn('exam-card', popup && 'exam-card-popup', isDone && 'exam-card-completed')} onClick={onDetails} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onDetails() }}>
       <div className="exam-card-head" onClick={(e) => e.stopPropagation()}>
         <span className="exam-top-icon"><Timer size={16} /></span>
@@ -806,22 +840,40 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
         </div>
       </div>
 
-      <div className="exam-info-pill">
-        <div className="exam-info-col">
-          <span className="exam-count-num"><RollingCounter text={days ?? '—'} /></span>
-          <span className="exam-count-unit">{days === 0 ? 'today' : days === 1 ? 'day left' : 'days left'}</span>
+      {isDone ? (
+        <div className="exam-info-pill">
+          <div className="exam-info-col">
+            <span className="exam-completed-text">Completed</span>
+          </div>
+          <span className="exam-info-sep" />
+          <div className="exam-info-col exam-info-col-main">
+            <span className="exam-info-date">{formatExamDateShort(exam.exam_date)}</span>
+            <span className="exam-info-sub">{examWeekdayLong(exam.exam_date)}</span>
+          </div>
+          <span className="exam-info-sep" />
+          <div className="exam-info-col">
+            <span className="exam-info-time">{exam.exam_time ? formatExamTime(exam.exam_time) : '—'}</span>
+            <span className="exam-info-sub">{dayPeriod(exam.exam_time)}</span>
+          </div>
         </div>
-        <span className="exam-info-sep" />
-        <div className="exam-info-col exam-info-col-main">
-          <span className="exam-info-date">{formatExamDateShort(exam.exam_date)}</span>
-          <span className="exam-info-sub">{examWeekdayLong(exam.exam_date)}</span>
+      ) : (
+        <div className="exam-info-pill">
+          <div className="exam-info-col">
+            <span className="exam-count-num"><RollingCounter text={days ?? '—'} /></span>
+            <span className="exam-count-unit">{days === 0 ? 'today' : days === 1 ? 'day left' : 'days left'}</span>
+          </div>
+          <span className="exam-info-sep" />
+          <div className="exam-info-col exam-info-col-main">
+            <span className="exam-info-date">{formatExamDateShort(exam.exam_date)}</span>
+            <span className="exam-info-sub">{examWeekdayLong(exam.exam_date)}</span>
+          </div>
+          <span className="exam-info-sep" />
+          <div className="exam-info-col">
+            <span className="exam-info-time">{exam.exam_time ? formatExamTime(exam.exam_time) : '—'}</span>
+            <span className="exam-info-sub">{dayPeriod(exam.exam_time)}</span>
+          </div>
         </div>
-        <span className="exam-info-sep" />
-        <div className="exam-info-col">
-          <span className="exam-info-time">{exam.exam_time ? formatExamTime(exam.exam_time) : '—'}</span>
-          <span className="exam-info-sub">{dayPeriod(exam.exam_time)}</span>
-        </div>
-      </div>
+      )}
 
       <div className="exam-card-foot" onClick={(e) => e.stopPropagation()}>
         {popup ? (
@@ -841,7 +893,7 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
           </span>
         ) : (
           <>
-            <span className="exam-foot-actions">
+            <span className="exam-foot-actions exam-foot-actions-grid exam-foot-desktop">
               <button
                 className={cn('exam-icon-btn', exam.completed ? 'exam-icon-done' : 'exam-icon-todo')}
                 onClick={onToggle}
@@ -850,11 +902,21 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
               >
                 <Check size={14} />
               </button>
-              <button className="exam-edit-pill" onClick={onEdit} aria-label="Edit exam" title="Edit exam">
-                <span className="exam-edit-pill-icon"><Pencil size={13} /></span> Edit
+              <button className="exam-icon-btn" onClick={onDetails} aria-label="View details" title="View details"><Eye size={14} /></button>
+              <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
+              <button className="exam-icon-btn" onClick={onDuplicate} aria-label="Duplicate exam" title="Duplicate exam"><Copy size={14} /></button>
+              <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
+            </span>
+            <span className="exam-foot-actions exam-foot-mobile">
+              <button
+                className={cn('exam-icon-btn', exam.completed ? 'exam-icon-done' : 'exam-icon-todo')}
+                onClick={onToggle}
+                aria-label={exam.completed ? 'Restore exam' : 'Mark exam complete'}
+                title={exam.completed ? 'Mark as upcoming (restore)' : 'Mark as complete'}
+              >
+                <Check size={14} />
               </button>
             </span>
-            <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
           </>
         )}
       </div>
@@ -881,6 +943,10 @@ function CompletedCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetail
       </div>
 
       {exam.category && <span className="exam-card-cat">{exam.category}</span>}
+
+      <div className="exam-completed-mark">
+        <Check size={18} /> COMPLETED
+      </div>
 
       <div className="exam-card-datetime">
         <span>📅 {formatExamDate(exam.exam_date)}</span>
@@ -932,21 +998,109 @@ function ExamListRow({ exam, now, onToggle, onEdit, onDelete, onDetails }) {
   )
 }
 
-function AllExamsDialog({
-  open, onClose, exams, now, categories, onAdd,
-  menuOpen, onMenu, onToggle, onEdit, onDetails, onDelete, onRestore, onDuplicate, menuRef,
-}) {
-  const [view, setView] = useState('grid')
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState('upcoming')
-  const [sort, setSort] = useState('nearest')
-  const [category, setCategory] = useState('all')
-  const [recruiter, setRecruiter] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
+function ExamFilterSheet({ open, onClose, categories, recruiterOptions, initial, onApply }) {
   const [dSection, setDSection] = useState('category')
   const [dCategory, setDCategory] = useState('all')
   const [dRecruiter, setDRecruiter] = useState('all')
   const [dSort, setDSort] = useState('nearest')
+  const wasOpen = useRef(false)
+
+  useEffect(() => {
+    if (open && !wasOpen.current && initial) {
+      setDSection('category')
+      setDCategory(initial.category ?? 'all')
+      setDRecruiter(initial.recruiter ?? 'all')
+      setDSort(initial.sort ?? 'nearest')
+    }
+    wasOpen.current = open
+  })
+
+  const handleApply = () => {
+    onApply({ category: dCategory, recruiter: dRecruiter, sort: dSort })
+  }
+
+  return (
+    <Dialog
+      isOpen={open}
+      onClose={onClose}
+      title="Filters"
+      size="sm"
+      footer={
+        <div className="exam-filter-foot">
+          <button type="button" className="exam-filter-foot-btn exam-filter-cancel" onClick={onClose}>Cancel</button>
+          <button type="button" className="exam-filter-foot-btn exam-filter-apply" onClick={handleApply}>Apply</button>
+        </div>
+      }
+    >
+      <div className="exam-filter-body">
+        <div className="exam-filter-labels">
+          {[
+            { id: 'category', label: 'Category' },
+            { id: 'recruiter', label: 'Recruiter' },
+            { id: 'sort', label: 'Sort by' },
+          ].map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={cn('exam-filter-label-btn', dSection === s.id && 'active')}
+              onClick={() => setDSection(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="exam-filter-sep" />
+        <div className="exam-filter-values">
+          {dSection === 'category' && (
+            <>
+              <button type="button" className={cn('exam-chip', dCategory === 'all' && 'exam-chip-active')} onClick={() => setDCategory('all')}>All</button>
+              {categories.map((c) => (
+                <button key={c} type="button" className={cn('exam-chip', dCategory === c && 'exam-chip-active')} onClick={() => setDCategory(c)}>{c}</button>
+              ))}
+            </>
+          )}
+          {dSection === 'recruiter' && (
+            <>
+              <button type="button" className={cn('exam-chip', dRecruiter === 'all' && 'exam-chip-active')} onClick={() => setDRecruiter('all')}>All</button>
+              {recruiterOptions.map((r) => (
+                <button key={r} type="button" className={cn('exam-chip', dRecruiter === r && 'exam-chip-active')} onClick={() => setDRecruiter(r)}>{r}</button>
+              ))}
+            </>
+          )}
+          {dSection === 'sort' && (
+            <>
+              {EXAM_SORTS.map((s) => (
+                <button key={s.value} type="button" className={cn('exam-chip', dSort === s.value && 'exam-chip-active')} onClick={() => setDSort(s.value)}>{s.label}</button>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
+function AllExamsDialog({
+  open, onClose, exams, now, categories, initialFilter = 'upcoming', onAdd,
+  menuOpen, onMenu, onToggle, onEdit, onDetails, onDelete, onRestore, onDuplicate, menuRef,
+}) {
+  const [view, setView] = useState('grid')
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState(initialFilter)
+  const [sort, setSort] = useState('nearest')
+  const [category, setCategory] = useState('all')
+  const [recruiter, setRecruiter] = useState('all')
+
+  useEffect(() => {
+    if (open) {
+      setFilter(initialFilter)
+      setQuery('')
+      setCategory('all')
+      setRecruiter('all')
+      setSort('nearest')
+    }
+  }, [open, initialFilter])
+  const [showFilters, setShowFilters] = useState(false)
 
   const recruiterOptions = useMemo(
     () => [...new Set(exams.map((e) => e.recruiter ?? e.subject).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
@@ -954,17 +1108,13 @@ function AllExamsDialog({
   )
 
   const openFilters = () => {
-    setDSection('category')
-    setDCategory(category)
-    setDRecruiter(recruiter)
-    setDSort(sort)
     setShowFilters(true)
   }
 
-  const applyFilters = () => {
-    setCategory(dCategory)
-    setRecruiter(dRecruiter)
-    setSort(dSort)
+  const applyFilters = ({ category: c, recruiter: r, sort: s }) => {
+    setCategory(c)
+    setRecruiter(r)
+    setSort(s)
     setShowFilters(false)
   }
 
@@ -995,7 +1145,7 @@ function AllExamsDialog({
     <Dialog
       isOpen={open}
       onClose={onClose}
-      title={`Upcoming Exams (${visible.length})`}
+      title={<><span className="exam-title-full">Upcoming Exams ({visible.length})</span><span className="exam-title-short">Exam ({visible.length})</span></>}
       size="lg"
       className="exam-all-dialog"
       headerActions={
@@ -1012,6 +1162,7 @@ function AllExamsDialog({
         <div className="exam-all-hero-icon"><CalendarDays size={26} /></div>
       </div>
 
+      <div className="exam-all-subrow">
       <div className="exam-view-toggle-row">
         <div className="exam-schedule-toggle exam-view-toggle">
           <button
@@ -1043,6 +1194,7 @@ function AllExamsDialog({
           </button>
         ))}
       </div>
+      </div>
 
       <div className="exam-all-toolbar">
         <div className="exam-search">
@@ -1062,7 +1214,7 @@ function AllExamsDialog({
         <button
           type="button"
           className={cn('exam-icon-btn exam-filter-btn', hasActiveFilters && 'has-active')}
-          onClick={openFilters}
+          onClick={() => setShowFilters(true)}
           aria-label="Open filters"
           title="Filters"
         >
@@ -1130,63 +1282,14 @@ function AllExamsDialog({
       )}
     </Dialog>
 
-    <Dialog
-      isOpen={showFilters}
+    <ExamFilterSheet
+      open={showFilters}
       onClose={() => setShowFilters(false)}
-      title="Filters"
-      size="sm"
-      footer={
-        <div className="exam-filter-foot">
-          <button type="button" className="exam-filter-foot-btn exam-filter-cancel" onClick={() => setShowFilters(false)}>Cancel</button>
-          <button type="button" className="exam-filter-foot-btn exam-filter-apply" onClick={applyFilters}>Apply</button>
-        </div>
-      }
-    >
-      <div className="exam-filter-body">
-        <div className="exam-filter-labels">
-          {[
-            { id: 'category', label: 'Category' },
-            { id: 'recruiter', label: 'Recruiter' },
-            { id: 'sort', label: 'Sort by' },
-          ].map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={cn('exam-filter-label-btn', dSection === s.id && 'active')}
-              onClick={() => setDSection(s.id)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <div className="exam-filter-sep" />
-        <div className="exam-filter-values">
-          {dSection === 'category' && (
-            <>
-              <button type="button" className={cn('exam-chip', dCategory === 'all' && 'exam-chip-active')} onClick={() => setDCategory('all')}>All</button>
-              {categories.map((c) => (
-                <button key={c} type="button" className={cn('exam-chip', dCategory === c && 'exam-chip-active')} onClick={() => setDCategory(c)}>{c}</button>
-              ))}
-            </>
-          )}
-          {dSection === 'recruiter' && (
-            <>
-              <button type="button" className={cn('exam-chip', dRecruiter === 'all' && 'exam-chip-active')} onClick={() => setDRecruiter('all')}>All</button>
-              {recruiterOptions.map((r) => (
-                <button key={r} type="button" className={cn('exam-chip', dRecruiter === r && 'exam-chip-active')} onClick={() => setDRecruiter(r)}>{r}</button>
-              ))}
-            </>
-          )}
-          {dSection === 'sort' && (
-            <>
-              {EXAM_SORTS.map((s) => (
-                <button key={s.value} type="button" className={cn('exam-chip', dSort === s.value && 'exam-chip-active')} onClick={() => setDSort(s.value)}>{s.label}</button>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-    </Dialog>
+      categories={categories}
+      recruiterOptions={recruiterOptions}
+      initial={{ category, recruiter, sort }}
+      onApply={applyFilters}
+    />
     </>
   )
 }
