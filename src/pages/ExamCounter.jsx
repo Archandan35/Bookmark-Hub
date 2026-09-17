@@ -1304,11 +1304,17 @@ function ExamDetails({ exam, now, onEdit }) {
         <span className="exam-count-unit">{countdownLabel(exam, now)}</span>
       </div>
       <dl className="exam-details-list">
-        <div><dt>Date</dt><dd>📅 {formatExamDate(exam.exam_date)}</dd></div>
-        <div><dt>Time</dt><dd>🕐 {formatExamTime(exam.exam_time)}</dd></div>
+        <div className="exam-details-duo">
+          <div className="exam-details-duo-item"><dt>Date</dt><dd>📅 {formatExamDate(exam.exam_date)}</dd></div>
+          <div className="exam-details-duo-item"><dt>Time</dt><dd>🕐 {formatExamTime(exam.exam_time)}</dd></div>
+        </div>
         <div><dt>Status</dt><dd><span className={cn('exam-status', meta.className)}>{meta.label}</span></dd></div>
-        {exam.category && <div><dt>Category</dt><dd>{exam.category}</dd></div>}
-        {exam.recruiter && <div><dt>Recruiter</dt><dd>{exam.recruiter}</dd></div>}
+        {(exam.category || exam.recruiter) && (
+          <div className="exam-details-duo">
+            {exam.category && <div className="exam-details-duo-item"><dt>Category</dt><dd>{exam.category}</dd></div>}
+            {exam.recruiter && <div className="exam-details-duo-item"><dt>Recruiter</dt><dd>{exam.recruiter}</dd></div>}
+          </div>
+        )}
         {exam.description && <div><dt>Description</dt><dd className="exam-desc-box">{exam.description}</dd></div>}
         {exam.exam_link && (
           <div><dt>Exam link</dt><dd>
