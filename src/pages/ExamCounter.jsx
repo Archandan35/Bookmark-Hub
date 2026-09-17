@@ -966,7 +966,7 @@ function ExamDetails({ exam, now, onEdit }) {
         <div><dt>Status</dt><dd><span className={cn('exam-status', meta.className)}>{meta.label}</span></dd></div>
         {exam.category && <div><dt>Category</dt><dd>{exam.category}</dd></div>}
         {exam.subject && <div><dt>Subject</dt><dd>{exam.subject}</dd></div>}
-        {exam.description && <div><dt>Description</dt><dd>{exam.description}</dd></div>}
+        {exam.description && <div><dt>Description</dt><dd className="exam-desc-box">{exam.description}</dd></div>}
         {exam.exam_link && (
           <div><dt>Exam link</dt><dd>
             <a href={exam.exam_link} target="_blank" rel="noreferrer" className="exam-ext-link">
