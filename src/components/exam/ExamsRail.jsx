@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   CalendarDays, Clock3, Timer, BarChart3, FileText, CheckCircle2,
   Lightbulb, Activity, Pencil, RotateCcw, Trash2, List,
-  ChevronDown, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronLeft, ChevronRight, Maximize2,
 } from 'lucide-react'
 import { Dialog } from '../Dialog'
 import { useExamStore, useExamNow, formatExamActivityTime } from '../../hooks/useExamStore'
@@ -69,10 +69,12 @@ function shortDate(dateStr) {
 }
 
 /** Compact Exam Schedule panel: switchable Calendar / List views. */
-function ExamSchedule() {
+function ExamSchedule({ expandable = true }) {
   const exams = useExamStore((s) => s.exams)
   const setDetailExam = useExamStore((s) => s.setDetailExam)
   const now = useExamNow()
+
+  const [showFull, setShowFull] = useState(false)
 
   const [view, setView] = useState('calendar')
   const [month, setMonth] = useState(() => {
@@ -156,7 +158,20 @@ function ExamSchedule() {
 
   return (
     <div className="right-panel-card">
-      <h3 className="right-panel-title">Exam Schedule</h3>
+      <h3 className="right-panel-title">
+        <span>Exam Schedule</span>
+        {expandable && (
+          <button
+            type="button"
+            className="monthly-expand-btn"
+            onClick={() => setShowFull(true)}
+            aria-label="Full view"
+            title="Full view"
+          >
+            <Maximize2 size={14} />
+          </button>
+        )}
+      </h3>
 
       <div className="exam-schedule-toggle">
         <button
@@ -266,6 +281,11 @@ function ExamSchedule() {
             )
           })}
         </div>
+      )}
+      {expandable && (
+        <Dialog isOpen={showFull} onClose={() => setShowFull(false)} title="Exam Schedule" size="lg" className="exam-schedule-dialog">
+          <ExamSchedule expandable={false} />
+        </Dialog>
       )}
     </div>
   )

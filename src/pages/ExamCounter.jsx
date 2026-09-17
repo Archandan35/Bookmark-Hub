@@ -3,7 +3,7 @@ import {
   Plus, Search, CalendarDays, Clock3, Pencil, MoreVertical, Check,
   RotateCcw, Trash2, Eye, Bell, BellOff, ChevronLeft, ChevronRight,
   Timer, ExternalLink, ArrowUpDown, Filter, X, Copy, Flame, Target,
-  FileText, CheckCircle2, BarChart3, ArrowRight,
+  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List,
 } from 'lucide-react'
 import { useAuthStore } from '../hooks/useStore'
 import { useExamStore, useExamNow } from '../hooks/useExamStore'
@@ -11,6 +11,7 @@ import { useToast } from '../components/Toast'
 import { Dialog } from '../components/Dialog'
 import { ConfirmationDialog } from '../components/ConfirmationDialog'
 import { EmptyState } from '../components/EmptyState'
+import { RollingCounter } from '../components/RollingCounter'
 import { Button } from '../components/Button'
 import { Input, Textarea } from '../components/Input'
 import {
@@ -32,6 +33,13 @@ const EMPTY_FORM = {
   notes: '',
   reminder_settings: [],
   reminders_enabled: true,
+}
+
+function formatExamDateShort(dateStr) {
+  if (!dateStr) return '—'
+  const d = parseLocalDate(dateStr) || new Date(dateStr)
+  if (!d || Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function reminderSummary(exam) {
@@ -56,6 +64,7 @@ export function ExamCounter() {
   const detailExam = useExamStore((s) => s.detailExam)
   const setDetailExam = useExamStore((s) => s.setDetailExam)
   const examScrollSignal = useExamStore((s) => s.examScrollSignal)
+  const allExamsSignal = useExamStore((s) => s.allExamsSignal)
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
@@ -70,6 +79,7 @@ export function ExamCounter() {
   const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [showAll, setShowAll] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
   const menuRef = useRef(null)
 
@@ -88,6 +98,13 @@ export function ExamCounter() {
       upcomingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [examScrollSignal])
+
+  // Open the View All popup when requested (e.g. header counter button).
+  useEffect(() => {
+    if (allExamsSignal > 0) {
+      setShowAll(true)
+    }
+  }, [allExamsSignal])
 
   useEffect(() => {
     const close = (e) => {
@@ -179,12 +196,6 @@ export function ExamCounter() {
     setQuery('')
     setCategory('all')
     setFilter('all')
-  }
-
-  const viewAllUpcoming = () => {
-    resetFilters()
-    upcomingTrackRef.current?.scrollTo({ left: 0, behavior: 'smooth' })
-    upcomingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const openDetails = (exam) => {
@@ -406,9 +417,9 @@ export function ExamCounter() {
         {/* Upcoming slider */}
         <section className="exam-section" ref={upcomingSectionRef}>
           <div className="exam-slider-head">
-            <h2 className="exam-section-title">Upcoming Exams ({upcoming.length})</h2>
-            <div className="exam-slider-controls">
-              <button className="exam-link-btn" onClick={viewAllUpcoming}>View All</button>
+              <h2 className="exam-section-title">Upcoming Exams ({upcoming.length})</h2>
+              <div className="exam-slider-controls">
+                <button className="exam-link-btn" onClick={() => setShowAll(true)}>View All</button>
               <button className="exam-icon-btn" onClick={() => slide(upcomingTrackRef, -1)} aria-label="Scroll left"><ChevronLeft size={16} /></button>
               <button className="exam-icon-btn" onClick={() => slide(upcomingTrackRef, 1)} aria-label="Scroll right"><ChevronRight size={16} /></button>
             </div>
@@ -486,7 +497,41 @@ export function ExamCounter() {
         </div>
       </div>
 
-      {/* Add / Edit dialog */}
+      {/* View All popup: grid/list with search, filter, sort */}
+      <AllExamsDialog
+        open={showAll}
+        onClose={() => setShowAll(false)}
+        exams={exams}
+        now={now}
+        categories={categories}
+        menuOpen={openMenu}
+        onMenu={(exam) => setOpenMenu(openMenu === exam.id ? null : exam.id)}
+        onToggle={handleToggleComplete}
+        onEdit={openEdit}
+        onDetails={(exam) => openDetails(exam)}
+        onDelete={(exam) => { setDeleteTarget(exam); setOpenMenu(null) }}
+        onRestore={handleRestore}
+        onDuplicate={handleDuplicate}
+        menuRef={menuRef}
+      />
+
+      {/* Details modal (also opened from the right panel) */}
+      <Dialog isOpen={!!detailExam} onClose={() => setDetailExam(null)} title={detailExam?.exam_name || 'Exam Details'} size="md">
+        {detailExam && <ExamDetails exam={detailExam} now={now} onEdit={() => { setDetailExam(null); openEdit(detailExam) }} />}
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <ConfirmationDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Exam?"
+        message={`Are you sure you want to delete "${deleteTarget?.exam_name}"?`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
+
+      {/* Add / Edit dialog — rendered last so it opens above any other popup */}
       <Dialog
         isOpen={showForm}
         onClose={() => { setShowForm(false); setDuplicateWarn(null) }}
@@ -548,22 +593,6 @@ export function ExamCounter() {
           </div>
         </div>
       </Dialog>
-
-      {/* Details modal (also opened from the right panel) */}
-      <Dialog isOpen={!!detailExam} onClose={() => setDetailExam(null)} title={detailExam?.exam_name || 'Exam Details'} size="md">
-        {detailExam && <ExamDetails exam={detailExam} now={now} onEdit={() => { setDetailExam(null); openEdit(detailExam) }} />}
-      </Dialog>
-
-      {/* Delete confirmation */}
-      <ConfirmationDialog
-        isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Delete Exam?"
-        message={`Are you sure you want to delete "${deleteTarget?.exam_name}"?`}
-        confirmLabel="Delete"
-        variant="danger"
-      />
     </div>
   )
 }
@@ -606,7 +635,7 @@ function FeaturedNextExam({ exam, now, onOpen }) {
         </div>
         <div className="exam-featured-right">
           <div className="exam-featured-count">
-            <span className="exam-featured-num">{days}</span>
+            <span className="exam-featured-num"><RollingCounter text={days} /></span>
             <span className="exam-featured-unit">{days <= 1 ? (days === 0 ? 'TODAY' : 'DAY LEFT') : 'DAYS LEFT'}</span>
           </div>
           <p className="exam-featured-quote">Every day brings you closer to your goal. Keep pushing forward!</p>
@@ -638,48 +667,73 @@ function ExamMenu({ exam, menuOpen, onMenu, onToggle, onEdit, onDetails, onDelet
   )
 }
 
-function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, onDelete, onRestore, onDuplicate, menuRef }) {
+function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, onDelete, onRestore, onDuplicate, menuRef, popup = false }) {
   const status = exam._status || deriveStatus(exam, now)
   const meta = STATUS_META[status]
-  const label = countdownLabel(exam, now)
   const days = daysLeft(exam, now)
 
   return (
-    <div className="exam-card" onClick={onDetails} role="button" tabIndex={0}
+    <div className={cn('exam-card', popup && 'exam-card-popup')} onClick={onDetails} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onDetails() }}>
       <div className="exam-card-top" onClick={(e) => e.stopPropagation()}>
-        <button
-          className={cn('exam-circle', exam.completed && 'exam-circle-done')}
-          onClick={onToggle}
-          aria-label={exam.completed ? 'Restore exam' : 'Mark exam complete'}
-          title={exam.completed ? 'Mark as upcoming (restore)' : 'Mark as complete'}
-        >
-          {exam.completed && <Check size={14} />}
-        </button>
         <span className="exam-card-name" title={exam.exam_name}>{exam.exam_name}</span>
         <ExamMenu exam={exam} menuOpen={menuOpen} onMenu={onMenu} onToggle={onToggle} onEdit={onEdit}
           onDetails={onDetails} onDelete={onDelete} onRestore={onRestore} onDuplicate={onDuplicate} menuRef={menuRef} />
       </div>
 
-      <div className="exam-count">
-        <span className="exam-count-num">{days === 0 ? '0' : days === 1 ? '1' : days}</span>
-        <span className="exam-count-unit">{label}</span>
+      <div className="exam-count exam-count-inline">
+        <span className="exam-count-num"><RollingCounter text={days ?? '—'} /></span>
+        <span className="exam-count-unit">{days === 0 ? 'today' : days === 1 ? 'day left' : 'days left'}</span>
       </div>
 
       <div className="exam-card-datetime">
-        <span>📅 {formatExamDate(exam.exam_date)}</span>
+        <span>📅 {popup ? formatExamDateShort(exam.exam_date) : formatExamDate(exam.exam_date)}</span>
         {exam.exam_time && <span>🕐 {formatExamTime(exam.exam_time)}</span>}
       </div>
 
-      <div className="exam-card-foot" onClick={(e) => e.stopPropagation()}>
+      {popup && (
         <span className="exam-foot-pills">
           <span className={cn('exam-status', meta.className)}>{meta.label}</span>
           {exam.category && <span className="exam-tag exam-tag-cat">{exam.category}</span>}
         </span>
-        <span className="exam-foot-actions">
-          <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
-          <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
-        </span>
+      )}
+
+      <div className="exam-card-foot" onClick={(e) => e.stopPropagation()}>
+        {popup ? (
+          <span className="exam-foot-actions exam-foot-actions-grid">
+            <button
+              className={cn('exam-icon-btn', exam.completed ? 'exam-icon-done' : 'exam-icon-todo')}
+              onClick={onToggle}
+              aria-label={exam.completed ? 'Restore exam' : 'Mark exam complete'}
+              title={exam.completed ? 'Mark as upcoming (restore)' : 'Mark as complete'}
+            >
+              <Check size={14} />
+            </button>
+            <button className="exam-icon-btn" onClick={onDetails} aria-label="View details" title="View details"><Eye size={14} /></button>
+            <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
+            <button className="exam-icon-btn" onClick={onDuplicate} aria-label="Duplicate exam" title="Duplicate exam"><Copy size={14} /></button>
+            <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
+          </span>
+        ) : (
+          <>
+            <span className="exam-foot-pills">
+              <span className={cn('exam-status', meta.className)}>{meta.label}</span>
+              {exam.category && <span className="exam-tag exam-tag-cat">{exam.category}</span>}
+            </span>
+            <span className="exam-foot-actions">
+              <button
+                className={cn('exam-icon-btn', exam.completed ? 'exam-icon-done' : 'exam-icon-todo')}
+                onClick={onToggle}
+                aria-label={exam.completed ? 'Restore exam' : 'Mark exam complete'}
+                title={exam.completed ? 'Mark as upcoming (restore)' : 'Mark as complete'}
+              >
+                <Check size={14} />
+              </button>
+              <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
+              <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
+            </span>
+          </>
+        )}
       </div>
     </div>
   )
@@ -691,7 +745,7 @@ function CompletedCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetail
       onKeyDown={(e) => { if (e.key === 'Enter') onDetails() }}>
       <div className="exam-card-top" onClick={(e) => e.stopPropagation()}>
         <button
-          className="exam-circle exam-circle-done"
+          className="exam-icon-btn exam-icon-done"
           onClick={onToggle}
           aria-label="Restore exam"
           title="Mark as upcoming (restore)"
@@ -721,13 +775,183 @@ function CompletedCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetail
   )
 }
 
+function ExamListRow({ exam, now, onToggle, onEdit, onDelete, onDetails }) {
+  const status = exam._status || deriveStatus(exam, now)
+  const meta = STATUS_META[status]
+  const days = daysLeft(exam, now)
+  return (
+    <div className="exam-listrow" onClick={onDetails} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onDetails() }}>
+      <button
+        className={cn('exam-circle', exam.completed && 'exam-circle-done')}
+        onClick={(e) => { e.stopPropagation(); onToggle() }}
+        aria-label={exam.completed ? 'Restore exam' : 'Mark exam complete'}
+        title={exam.completed ? 'Mark as upcoming (restore)' : 'Mark as complete'}
+      >
+        {exam.completed && <Check size={14} />}
+      </button>
+      <div className="exam-listrow-main">
+        <span className="exam-listrow-name" title={exam.exam_name}>{exam.exam_name}</span>
+        <span className="exam-listrow-sub">
+          📅 {formatExamDateShort(exam.exam_date)}{exam.exam_time ? ` • ${formatExamTime(exam.exam_time)}` : ''}
+        </span>
+      </div>
+      <span className="exam-listrow-count">
+        {days === null ? '—' : days === 0 ? 'Today' : days === 1 ? '1 day' : `${days} days`}
+      </span>
+      <span className={cn('exam-status', meta.className)}>{meta.label}</span>
+      <span className="exam-foot-actions" onClick={(e) => e.stopPropagation()}>
+        <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
+        <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
+      </span>
+    </div>
+  )
+}
+
+function AllExamsDialog({
+  open, onClose, exams, now, categories,
+  menuOpen, onMenu, onToggle, onEdit, onDetails, onDelete, onRestore, onDuplicate, menuRef,
+}) {
+  const [view, setView] = useState('grid')
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('upcoming')
+  const [sort, setSort] = useState('nearest')
+  const [category, setCategory] = useState('all')
+
+  const counts = useMemo(() => {
+    const c = { all: exams.length, upcoming: 0, today: 0, tomorrow: 0, completed: 0, passed: 0 }
+    exams.forEach((e) => {
+      const s = deriveStatus(e, now)
+      if (['upcoming', 'tomorrow', 'today'].includes(s)) c.upcoming += 1
+      if (s === 'today') c.today += 1
+      if (s === 'tomorrow') c.tomorrow += 1
+      if (s === 'completed') c.completed += 1
+      if (s === 'passed') c.passed += 1
+    })
+    return c
+  }, [exams, now])
+
+  const visible = useMemo(() => {
+    let list = filterExams(exams, { query, filter }, now)
+    if (category !== 'all') list = list.filter((e) => e.category === category)
+    return sortExams(list, sort)
+  }, [exams, query, filter, category, sort, now])
+
+  return (
+    <Dialog
+      isOpen={open}
+      onClose={onClose}
+      title={`Upcoming Exams (${visible.length})`}
+      size="lg"
+      className="exam-all-dialog"
+    >
+      <div className="exam-all-toolbar">
+        <div className="exam-search">
+          <Search size={16} className="exam-search-icon" />
+          <input
+            className="exam-search-input"
+            placeholder="Search exams by name, subject, category..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button className="exam-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <div className="exam-select-wrap">
+          <Filter size={14} />
+          <select className="exam-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
+            <option value="all">All Categories</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="exam-select-wrap">
+          <ArrowUpDown size={14} />
+          <select className="exam-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort exams">
+            {EXAM_SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
+        <div className="exam-schedule-toggle exam-view-toggle">
+          <button
+            type="button"
+            className={cn('exam-schedule-btn', view === 'grid' && 'active')}
+            onClick={() => setView('grid')}
+          >
+            <LayoutGrid size={14} /> Grid
+          </button>
+          <button
+            type="button"
+            className={cn('exam-schedule-btn', view === 'list' && 'active')}
+            onClick={() => setView('list')}
+          >
+            <List size={14} /> List
+          </button>
+        </div>
+      </div>
+
+      <div className="exam-filter-chips">
+        {EXAM_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            className={cn('exam-chip', filter === f.value && 'exam-chip-active')}
+            onClick={() => setFilter(f.value)}
+          >
+            {f.label} <span className="exam-chip-count">({counts[f.value] ?? 0})</span>
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="exam-muted" style={{ marginTop: 12 }}>No exams match your search.</p>
+      ) : view === 'grid' ? (
+        <div className="exam-all-grid">
+          {visible.map((exam) => (
+            <ExamCard
+              key={exam.id}
+              exam={exam}
+              now={now}
+              popup
+              menuOpen={menuOpen === exam.id}
+              onMenu={() => onMenu(exam)}
+              onToggle={() => onToggle(exam)}
+              onEdit={() => onEdit(exam)}
+              onDetails={() => onDetails(exam)}
+              onDelete={() => onDelete(exam)}
+              onRestore={() => onRestore(exam)}
+              onDuplicate={() => onDuplicate(exam)}
+              menuRef={menuRef}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="exam-all-list">
+          {visible.map((exam) => (
+            <ExamListRow
+              key={exam.id}
+              exam={exam}
+              now={now}
+              onToggle={() => onToggle(exam)}
+              onEdit={() => onEdit(exam)}
+              onDelete={() => onDelete(exam)}
+              onDetails={() => onDetails(exam)}
+            />
+          ))}
+        </div>
+      )}
+    </Dialog>
+  )
+}
+
 function ExamDetails({ exam, now, onEdit }) {
   const status = deriveStatus(exam, now)
   const meta = STATUS_META[status]
   return (
     <div className="exam-details">
       <div className="exam-details-count">
-        <span className="exam-count-num">{exam.completed ? '✓' : (daysLeft(exam, now) ?? '—')}</span>
+        <span className="exam-count-num"><RollingCounter text={exam.completed ? '✓' : (daysLeft(exam, now) ?? '—')} /></span>
         <span className="exam-count-unit">{countdownLabel(exam, now)}</span>
       </div>
       <dl className="exam-details-list">

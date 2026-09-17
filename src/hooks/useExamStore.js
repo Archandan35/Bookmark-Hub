@@ -34,10 +34,13 @@ export const useExamStore = create((set) => ({
   detailExam: null,
   /** Incremented to ask the page to scroll to the Upcoming slider. */
   examScrollSignal: 0,
+  /** Incremented to ask the page to open the View All exams popup. */
+  allExamsSignal: 0,
 
   setExams: (exams) => set({ exams }),
   setDetailExam: (exam) => set({ detailExam: exam }),
   bumpExamScroll: () => set((s) => ({ examScrollSignal: s.examScrollSignal + 1 })),
+  bumpAllExams: () => set((s) => ({ allExamsSignal: s.allExamsSignal + 1 })),
 
   loadExams: async (userId) => {
     set({ examsLoading: true })

@@ -5494,7 +5494,7 @@
 .exam-sched-month { font-size: 13.5px; font-weight: 700; color: var(--color-text-primary); }
 .exam-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .exam-mini-weekday { text-align: center; font-size: 10px; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; padding: 3px 0; }
-.exam-mini-cell { position: relative; aspect-ratio: 1; border: 1px solid transparent; background: transparent; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 12px; font-weight: 600; color: var(--color-text-primary); cursor: pointer; font-family: inherit; padding: 1px; }
+.exam-mini-cell { position: relative; aspect-ratio: 1; border: 1px solid transparent; background: transparent; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 12px; font-weight: 600; color: var(--color-text-primary); cursor: pointer; font-family: inherit; padding: 1px; }
 .exam-mini-cell:hover:not(.exam-mini-empty) { border-color: var(--color-primary); }
 .exam-mini-empty { cursor: default; }
 .exam-mini-has { background: rgba(91,63,214,0.08); }
@@ -5543,3 +5543,184 @@
 .exam-list-status-tomorrow { color: #B45309; }
 .exam-list-status-today { color: #DC2626; }
 .exam-list-status-done { color: var(--color-success); }
+
+/* Monthly Streak card inside the narrow statistics right panel.
+   Scoped to direct rail children so the full-view popup keeps full-size styles. */
+.statistics-rail > .monthly-streak-card { padding: 16px; }
+.statistics-rail > .monthly-streak-card .chart-card-header { flex-direction: column; align-items: stretch; }
+.statistics-rail > .monthly-streak-card .chart-card-header-actions { width: 100%; }
+.statistics-rail > .monthly-streak-card .monthly-view-tabs { width: 100%; margin-left: 0; }
+.statistics-rail > .monthly-streak-card .monthly-nav-label { min-width: 0; flex: 1; font-size: 13px; }
+.statistics-rail > .monthly-streak-card .monthly-streak-summary { grid-template-columns: repeat(2, 1fr); }
+.statistics-rail > .monthly-streak-card .monthly-streak-stat-value { font-size: 16px; }
+.statistics-rail > .monthly-streak-card .monthly-calendar-grid { row-gap: 8px; }
+.statistics-rail > .monthly-streak-card .monthly-calendar-cell { width: 30px; height: 30px; }
+.statistics-rail > .monthly-streak-card .monthly-calendar-date { font-size: 11px; }
+.statistics-rail > .monthly-streak-card .monthly-calendar-hours { display: none; }
+.statistics-rail > .monthly-streak-card .monthly-week-row { flex-direction: column; }
+.statistics-rail > .monthly-streak-card .monthly-week-total { min-width: 0; width: 100%; flex-direction: row; justify-content: space-between; }
+/* Full-view expand button in the card title */
+.monthly-expand-btn { margin-left: auto; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); background: var(--bg-secondary); border-radius: 8px; color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
+.monthly-expand-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* Streak full-view dialog: 70% width with enlarged calendar cells */
+.streak-dialog { max-width: 70%; }
+.streak-dialog .monthly-calendar-cell { width: 45px; height: 45px; }
+.streak-dialog .monthly-week-cell { width: 45px; height: 45px; }
+@media (max-width: 768px) { .streak-dialog { max-width: 95%; } }
+
+/* Dashboard: bottom stats row holds 4 cards; Next Exam card */
+.stats-grid-bottom { grid-template-columns: repeat(4, 1fr); }
+.stat-card-exam { cursor: pointer; }
+.stat-card-exam .stat-card-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@media (max-width: 1200px) { .stats-grid-bottom { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1024px) { .stats-grid-bottom { grid-template-columns: repeat(2, 1fr); } }
+
+/* Rolling odometer counter */
+.roll-counter { display: inline-flex; align-items: center; }
+.roll-digit { display: inline-block; height: 1em; overflow: hidden; line-height: 1; vertical-align: middle; }
+.roll-strip { display: flex; flex-direction: column; transition: transform 0.9s cubic-bezier(0.25, 0.9, 0.25, 1); will-change: transform; }
+.roll-strip > span { height: 1em; line-height: 1; font-variant-numeric: tabular-nums; }
+.roll-space { display: inline-block; width: 0.28em; }
+
+/* Next Exam card: big counter + small label side by side */
+.stat-card-value-inline { display: flex; align-items: center; gap: 6px; }
+.stat-card-value-sub { font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
+
+/* Upcoming cards: big counter + small label side by side */
+.exam-count-inline { flex-direction: row; align-items: center; justify-content: center; gap: 8px; }
+.exam-count-inline .exam-count-unit { margin-top: 0; }
+
+/* Exam Schedule full-view dialog */
+.exam-schedule-dialog { max-width: 70%; }
+.exam-schedule-dialog .exam-mini-grid { max-width: none; }
+.exam-schedule-dialog .exam-schedule-list { max-height: 60vh; }
+@media (max-width: 768px) { .exam-schedule-dialog { max-width: 95%; } }
+
+/* View All exams popup (70% width, grid/list views) */
+.exam-all-dialog { max-width: 70%; }
+.exam-all-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.exam-all-toolbar .exam-search { flex: 1 1 auto; min-width: 0; }
+.exam-view-toggle { margin-bottom: 0; width: 210px; flex-shrink: 0; }
+.exam-all-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-top: 12px; }
+.exam-all-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.exam-listrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--bg-primary); cursor: pointer; }
+.exam-listrow:hover { border-color: var(--color-primary); }
+.exam-listrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.exam-listrow-name { font-size: 14px; font-weight: 700; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exam-listrow-sub { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exam-listrow-count { font-size: 14px; font-weight: 800; color: var(--color-primary); white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 768px) {
+  .exam-all-dialog { max-width: 95%; }
+  .exam-all-toolbar { flex-wrap: wrap; }
+  .exam-view-toggle { width: 100%; }
+}
+
+/* View All toolbar stays on one row */
+.exam-all-toolbar { flex-wrap: nowrap; }
+.exam-all-toolbar .exam-select-wrap { flex-shrink: 0; }
+
+/* ===========================
+   RESPONSIVE ï¿½ popups, exam counter page, calendar popups
+   =========================== */
+@media (max-width: 1100px) {
+  .exam-all-dialog,
+  .exam-schedule-dialog,
+  .streak-dialog { max-width: 85%; }
+}
+
+@media (max-width: 900px) {
+  .exam-all-toolbar { flex-wrap: wrap; }
+  .exam-all-toolbar .exam-search { flex: 1 1 100%; }
+  .exam-view-toggle { width: 100%; }
+}
+
+@media (max-width: 768px) {
+  .exam-featured { padding: 20px; }
+  .exam-featured-count { min-width: 0; width: 100%; }
+  .exam-sched-month { font-size: 12.5px; }
+}
+
+@media (max-width: 480px) {
+  /* Popups */
+  .streak-dialog .monthly-calendar-cell,
+  .streak-dialog .monthly-week-cell { width: 38px; height: 38px; }
+  .exam-schedule-dialog .exam-mini-grid { max-width: none; }
+  .exam-listrow { flex-wrap: wrap; gap: 8px; padding: 10px; }
+  .exam-listrow-main { flex: 1 1 100%; }
+  .exam-details-list > div { flex-direction: column; gap: 4px; }
+  .exam-details-list dt { width: 100%; }
+  /* Exam counter page */
+  .exam-stats { gap: 10px; }
+  .exam-stat-card { padding: 10px 12px; }
+  .exam-top { gap: 10px; }
+  .exam-page-title { font-size: 20px; }
+  .exam-filter-chips { gap: 6px; }
+  .exam-chip { padding: 6px 11px; font-size: 12px; }
+  .exam-slider-head { flex-wrap: wrap; }
+  .exam-banner { padding: 16px; }
+}
+
+/* Header exam counter badge */
+.header-exam-count { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--color-primary); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-secondary); }
+
+/* Footer complete box: same shape as edit, green on hover + when done */
+.exam-icon-btn.exam-icon-todo:hover { background: var(--color-success); border-color: var(--color-success); color: #fff; }
+.exam-icon-btn.exam-icon-done { background: var(--color-success); border-color: var(--color-success); color: #fff; }
+.exam-icon-btn.exam-icon-done:hover { background: var(--color-success); border-color: var(--color-success); color: #fff; }
+
+/* Popup-only card layout: badges below time, 4 equally-distributed action buttons */
+.exam-card-popup .exam-card-foot { display: flex; }
+.exam-card-popup .exam-foot-actions-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: 100%; }
+.exam-card-popup .exam-foot-actions-grid .exam-icon-btn { width: 100%; }
+
+/* ===========================
+   GLOBAL RESPONSIVE PASS — modals, shell, tables, goals, exam
+   =========================== */
+
+/* Modals / popups: edge padding so dialogs never touch the screen sides */
+.modal-overlay { padding: 16px; }
+
+/* App shell: stack the right panel below content on phones
+   (only the statistics rail stays visible at this width) */
+@media (max-width: 768px) {
+  .app-body { flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+  .main-content { overflow: visible; }
+  .right-panel { width: 100%; flex-shrink: 0; border-left: none; border-top: 1px solid var(--color-border); overflow: visible; }
+}
+
+/* Header: icon-only action buttons on small phones */
+@media (max-width: 640px) {
+  .header-btn-label { display: none; }
+}
+
+/* Tables: scroll horizontally instead of overflowing */
+.table-card { overflow-x: auto; }
+.sessions-table { min-width: 620px; }
+
+/* Goals page: collapse grids + rows */
+@media (max-width: 1024px) {
+  .goals-stat-cards { grid-template-columns: repeat(2, 1fr); }
+  .goals-categories-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .goals-header { flex-direction: column; align-items: stretch; height: auto; gap: 12px; }
+  .goals-tabs { overflow-x: auto; }
+  .goals-goal-row { flex-wrap: wrap; gap: 12px; }
+  .goals-goal-progress { flex: 1 1 100%; }
+  .goals-goal-meta { width: 100%; justify-content: space-between; }
+  .goals-categories-grid { grid-template-columns: 1fr; }
+}
+
+/* Small-phone tightening */
+@media (max-width: 480px) {
+  .modal-overlay { padding: 10px; }
+  .dialog-body { padding: 16px; }
+  .dialog-header { padding: 14px 16px; }
+  .dialog-footer { padding: 12px 16px; flex-wrap: wrap; }
+  .exam-toolbar .exam-select-wrap { flex: 1 1 45%; }
+  .exam-toolbar .exam-select { width: 100%; }
+  .trash-item { flex-wrap: wrap; gap: 8px; }
+  .theme-options { flex-wrap: wrap; }
+  .settings-card { padding: 16px; }
+}

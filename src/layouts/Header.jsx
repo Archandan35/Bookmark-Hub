@@ -2,19 +2,25 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Bell, Settings, Moon, Sun, LogOut, User, Star, Menu, X, RefreshCw,
+  Play, Square, Timer,
 } from 'lucide-react'
 import { Button } from '../components/Button'
 import { SearchBar } from '../components/SearchBar'
 import { Avatar } from '../components/Avatar'
 import { Dropdown } from '../components/Dropdown'
 import { BookmarkModal } from '../components/BookmarkModal'
+import { StudySessionPipModal } from '../components/study/StudySessionPipModal'
+import { studySessionController } from '../services/studySessionController'
+import { useSessionStore } from '../hooks/useSessionStore'
+import { useExamStore } from '../hooks/useExamStore'
+import { deriveStatus } from '../services/ExamService'
 import { useAppStore } from '../hooks/useStore'
 import { useAuthStore, useBookmarkStore } from '../hooks/useStore'
 import { AuthService } from '../services/AuthService'
 import { BookmarkService } from '../services/BookmarkService'
 import { clearSensitiveStorage } from '../utils/security'
 import { useToast } from '../components/Toast'
-import { formatRelativeTime } from '../utils/helpers'
+import { formatRelativeTime, formatDuration } from '../utils/helpers'
 
 export function Header({ sidebarCollapsed }) {
   const navigate = useNavigate()
@@ -24,7 +30,30 @@ export function Header({ sidebarCollapsed }) {
   const { addToast } = useToast()
   const [showAddModal, setShowAddModal] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showStartStudy, setShowStartStudy] = useState(false)
   const searchRef = useRef(null)
+
+  const activeSession = useSessionStore((s) => s.activeSession)
+  const sessionPhase = useSessionStore((s) => s.sessionPhase)
+  const getElapsedSeconds = useSessionStore((s) => s.getElapsedSeconds)
+  useSessionStore((s) => s.now)
+  const hasSession = !!activeSession && (sessionPhase === 'active' || sessionPhase === 'paused')
+  const isRunning = hasSession && activeSession.runningSince != null
+  const elapsedLabel = hasSession ? formatDuration(getElapsedSeconds()) : ''
+
+  const exams = useExamStore((s) => s.exams)
+  const loadExams = useExamStore((s) => s.loadExams)
+  const bumpAllExams = useExamStore((s) => s.bumpAllExams)
+  const examsLoadedFor = useRef(null)
+  useEffect(() => {
+    if (user && examsLoadedFor.current !== user.id) {
+      examsLoadedFor.current = user.id
+      loadExams(user.id)
+    }
+  }, [user, loadExams])
+  const upcomingCount = exams.filter((e) =>
+    ['upcoming', 'tomorrow', 'today'].includes(deriveStatus(e))
+  ).length
 
   const recentBookmarks = [...bookmarks]
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
@@ -69,6 +98,28 @@ export function Header({ sidebarCollapsed }) {
     }
   }
 
+  const handleSessionButton = async () => {
+    if (!hasSession) {
+      setShowStartStudy(true)
+      return
+    }
+    try {
+      if (isRunning) {
+        const result = await studySessionController.stopStudy()
+        if (!result?.completed) {
+          addToast('Session too short to record', 'info')
+        } else {
+          addToast('Session completed', 'success')
+        }
+        return
+      }
+      studySessionController.resume()
+    } catch {
+      // Fall back to a fresh start if resume/stop fails on a stale session.
+      setShowStartStudy(true)
+    }
+  }
+
   const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User'
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -101,8 +152,27 @@ export function Header({ sidebarCollapsed }) {
           </div>
           <div className="header-right">
             <Button variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
-              <Plus size={16} /> Add Bookmark
+              <Plus size={16} /> <span className="header-btn-label">Add Bookmark</span>
             </Button>
+            {!hasSession ? (
+              <Button variant="secondary" size="sm" onClick={handleSessionButton}>
+                <Play size={16} /> <span className="header-btn-label">Start Session</span>
+              </Button>
+            ) : isRunning ? (
+              <Button variant="danger" size="sm" onClick={handleSessionButton}>
+                <Square size={16} /> <span className="header-btn-label">Stop{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" onClick={handleSessionButton}>
+                <Play size={16} /> <span className="header-btn-label">Continue{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
+              </Button>
+            )}
+            <div className="header-notification-wrapper">
+              <button className="header-icon-btn" aria-label="Upcoming exams" title="Upcoming exams" onClick={() => { navigate('/exams'); bumpAllExams() }}>
+                <Timer size={20} />
+                {upcomingCount > 0 && <span className="header-exam-count">{upcomingCount}</span>}
+              </button>
+            </div>
             <div className="header-notification-wrapper">
               <button className="header-icon-btn" aria-label="Notifications" onClick={() => setShowNotifications(!showNotifications)}>
                 <Bell size={20} />
@@ -172,6 +242,10 @@ export function Header({ sidebarCollapsed }) {
         onClose={() => setShowAddModal(false)}
         collections={collections}
         onSave={handleBookmarkSave}
+      />
+      <StudySessionPipModal
+        open={showStartStudy}
+        onClose={() => setShowStartStudy(false)}
       />
     </>
   )

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Bookmark, FolderOpen, Video, FileText, StickyNote,
-  Clock, Target, Grid3X3, List, Plus,
+  Clock, Target, Grid3X3, List, Plus, Timer,
 } from 'lucide-react'
 import { Card } from '../components/Card'
 import { BookmarkCard } from '../components/BookmarkCard'
@@ -13,6 +14,10 @@ import { Player } from '../components/Player'
 import { useAppStore } from '../hooks/useStore'
 import { useBookmarkStore, useAuthStore } from '../hooks/useStore'
 import { useSessionStore } from '../hooks/useSessionStore'
+import { useExamStore, useExamNow } from '../hooks/useExamStore'
+import {
+  filterExams, sortExams, daysLeft, formatExamDate, formatExamTime,
+} from '../services/ExamService'
 import { useDailyGoal } from '../hooks/useDailyGoal'
 import { BOOKMARK_TYPES, SORT_OPTIONS } from '../constants'
 import { Tabs } from '../components/Tabs'
@@ -21,10 +26,12 @@ import { BookmarkService } from '../services/BookmarkService'
 import { CollectionService } from '../services/CollectionService'
 import { StudyService } from '../services/StudyService'
 import { EmptyState } from '../components/EmptyState'
+import { RollingCounter } from '../components/RollingCounter'
 import { secureLog } from '../utils/security'
 import { useToast } from '../components/Toast'
 
 export function Dashboard() {
+  const navigate = useNavigate()
   const { viewMode, setViewMode, sortBy, setSortBy, filterType, setFilterType } = useAppStore()
   const { user } = useAuthStore()
   const { bookmarks, setBookmarks, addBookmark, updateBookmark, removeBookmark, collections, setCollections, setBookmarks: storeSetBookmarks } = useBookmarkStore()
@@ -36,6 +43,9 @@ export function Dashboard() {
   const sessions = useSessionStore((s) => s.sessions)
   const addSessions = useSessionStore((s) => s.addSessions)
   const getTodayStudySeconds = useSessionStore((s) => s.getTodayStudySeconds)
+  const exams = useExamStore((s) => s.exams)
+  const loadExams = useExamStore((s) => s.loadExams)
+  const now = useExamNow()
   const { targetSeconds: dailyGoalSeconds } = useDailyGoal(user?.id)
   const [loading, setLoading] = useState(true)
   const { addToast } = useToast()
@@ -43,6 +53,10 @@ export function Dashboard() {
   useEffect(() => {
     loadDashboardData()
   }, [user])
+
+  useEffect(() => {
+    if (user) loadExams(user.id)
+  }, [user, loadExams])
 
   const loadDashboardData = async () => {
     if (!user) return
@@ -84,6 +98,13 @@ export function Dashboard() {
       { icon: StickyNote, label: 'Notes', value: typeCounts.note || 0, desc: `${typeCounts.note || 0} total`, progress: null, color: '#EC4899' },
     ]
   }, [bookmarks, collections, sessions, getTodayStudySeconds, dailyGoalSeconds])
+
+  const nextExam = useMemo(() => {
+    const act = sortExams(filterExams(exams, { query: '', filter: 'upcoming' }, now), 'nearest')
+    return act[0] || null
+  }, [exams, now])
+
+  const nextExamDays = nextExam ? daysLeft(nextExam, now) : null
 
   const typeFilters = useMemo(() => [
     { id: 'all', label: 'All', count: bookmarks.length },
@@ -195,7 +216,18 @@ export function Dashboard() {
     return (
       <div className="dashboard">
         <div className="stats-grid">
-          {Array.from({ length: 7 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="stat-card">
+              <div className="skeleton skeleton-text" style={{ width: '40px', height: '40px', borderRadius: '8px' }} />
+              <div className="card-body">
+                <div className="skeleton skeleton-title" />
+                <div className="skeleton skeleton-text" />
+              </div>
+            </Card>
+          ))}
+        </div>
+        <div className="stats-grid stats-grid-bottom">
+          {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="stat-card">
               <div className="skeleton skeleton-text" style={{ width: '40px', height: '40px', borderRadius: '8px' }} />
               <div className="card-body">
@@ -212,33 +244,32 @@ export function Dashboard() {
   return (
     <div className="dashboard">
       <div className="stats-grid">
-        {stats.slice(0, 4).map((stat) => (
-          <Card key={stat.label} hover className="stat-card">
-            <div className="stat-card-icon" style={{ '--icon-bg': `${stat.color}15`, '--icon-color': stat.color }}>
-              <stat.icon size={22} />
-            </div>
-            <div className="stat-card-content">
-              <p className="stat-card-label">{stat.label}</p>
-              <p className="stat-card-value">{stat.value}</p>
-              <p className="stat-card-desc">{stat.desc}</p>
-              {stat.progress !== null && <ProgressBar value={stat.progress} color="purple" size="sm" />}
-            </div>
-          </Card>
+        {[stats[0], stats[1]].map((stat) => (
+          <DashboardStatCard key={stat.label} stat={stat} />
         ))}
+        <Card hover className="stat-card stat-card-exam" onClick={() => navigate('/exams')}>
+          <div className="stat-card-icon" style={{ '--icon-bg': '#5B3FD615', '--icon-color': '#5B3FD6' }}>
+            <Timer size={22} />
+          </div>
+          <div className="stat-card-content">
+            <p className="stat-card-label">Next Exam</p>
+            <p className="stat-card-value stat-card-value-inline">
+              <RollingCounter text={nextExam ? nextExamDays : '—'} />
+              {nextExam && <span className="stat-card-value-sub">days left</span>}
+            </p>
+            <p className="stat-card-desc">{nextExam ? nextExam.exam_name : 'No upcoming exams'}</p>
+            {nextExam && (
+              <p className="stat-card-desc">
+                {formatExamDate(nextExam.exam_date)}{nextExam.exam_time ? ` • ${formatExamTime(nextExam.exam_time)}` : ''}
+              </p>
+            )}
+          </div>
+        </Card>
+        <DashboardStatCard stat={stats[2]} />
       </div>
       <div className="stats-grid stats-grid-bottom">
-        {stats.slice(4, 7).map((stat) => (
-          <Card key={stat.label} hover className="stat-card">
-            <div className="stat-card-icon" style={{ '--icon-bg': `${stat.color}15`, '--icon-color': stat.color }}>
-              <stat.icon size={22} />
-            </div>
-            <div className="stat-card-content">
-              <p className="stat-card-label">{stat.label}</p>
-              <p className="stat-card-value">{stat.value}</p>
-              <p className="stat-card-desc">{stat.desc}</p>
-              {stat.progress !== null && <ProgressBar value={stat.progress} color="purple" size="sm" />}
-            </div>
-          </Card>
+        {[stats[3], stats[4], stats[5], stats[6]].map((stat) => (
+          <DashboardStatCard key={stat.label} stat={stat} />
         ))}
       </div>
 
@@ -338,6 +369,23 @@ export function Dashboard() {
         onSave={handleBookmarkSave}
       />
     </div>
+  )
+}
+
+function DashboardStatCard({ stat }) {
+  if (!stat) return null
+  return (
+    <Card hover className="stat-card">
+      <div className="stat-card-icon" style={{ '--icon-bg': `${stat.color}15`, '--icon-color': stat.color }}>
+        <stat.icon size={22} />
+      </div>
+      <div className="stat-card-content">
+        <p className="stat-card-label">{stat.label}</p>
+        <p className="stat-card-value">{stat.value}</p>
+        <p className="stat-card-desc">{stat.desc}</p>
+        {stat.progress !== null && <ProgressBar value={stat.progress} color="purple" size="sm" />}
+      </div>
+    </Card>
   )
 }
 

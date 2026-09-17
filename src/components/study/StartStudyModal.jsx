@@ -284,7 +284,7 @@ export function StartStudyModal({ open, onClose, onStarted, prefill = {} }) {
   ))
 
   return (
-    <Modal open={open} onClose={onClose} title="Start Study Session" maxWidth={560} className="start-study-modal">
+    <Modal isOpen={open} onClose={onClose} title="Start Study Session" maxWidth={560} className="start-study-modal">
       <div className="start-study-form">
         {prefill.url && (
           <div className="start-study-prefill">

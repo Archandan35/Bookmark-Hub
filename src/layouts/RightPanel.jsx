@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Play, Pause, StopCircle, RotateCcw, Clock, TrendingUp, BarChart3, Video, FileText, Music, Image, Check, CheckCircle, Flag, Flame, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react'
-import { useSessionStore, formatHMS, VIDEO_STATE } from '../hooks/useSessionStore'
+import { Play, Pause, StopCircle, RotateCcw, Clock, TrendingUp, BarChart3, Video, FileText, Music, Image, Check, CheckCircle, Flag, Flame, ChevronLeft, ChevronRight, ArrowRight, Maximize2 } from 'lucide-react'
+import { useSessionStore, formatHMS, VIDEO_STATE, sessionSeconds } from '../hooks/useSessionStore'
 import { studySessionController } from '../services/studySessionController'
 import { useBookmarkStore, useAuthStore, useAppStore } from '../hooks/useStore'
-import { formatDuration, formatRelativeTime, localDateStr } from '../utils/helpers'
+import { formatDuration, formatRelativeTime, localDateStr, parseLocalDate } from '../utils/helpers'
 import { Button } from '../components/Button'
 import { StudyService } from '../services/StudyService'
 import { StudyTimerPanel } from '../components/study/StudyTimerPanel'
@@ -15,6 +15,8 @@ import { useLocation } from 'react-router-dom'
 import { GoalsService } from '../services/GoalsService'
 import { useDailyGoal } from '../hooks/useDailyGoal'
 import { ExamsRail } from '../components/exam/ExamsRail'
+import { Tabs } from '../components/Tabs'
+import { Dialog } from '../components/Dialog'
 
 export function focusScoreFor(durationSeconds) {
   const d = durationSeconds || 0
@@ -47,6 +49,303 @@ function relativeDays(value) {
   if (diff < 0) return 'Overdue'
   if (diff === 0) return 'Today'
   return `In ${diff} day${diff === 1 ? '' : 's'}`
+}
+
+const STREAK_WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function monthCellHours(seconds) {
+  const hrs = Math.floor((seconds || 0) / 3600)
+  const mins = Math.floor(((seconds || 0) % 3600) / 60)
+  if (hrs > 0) return `${hrs}h ${mins}m`
+  if (mins > 0) return `${mins}m`
+  return '0m'
+}
+
+function streakCellInfo(minutes) {
+  if (minutes <= 0) return { bg: '#F1F3F9', dark: false }
+  if (minutes < 60) return { bg: 'rgb(169, 169, 169)', dark: true }
+  if (minutes < 180) return { bg: 'rgb(255, 205, 0)', dark: true }
+  if (minutes < 300) return { bg: 'rgb(247, 255, 0)', dark: true }
+  return { bg: '#5B3FD6', dark: true }
+}
+
+function formatStreakDuration(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds || 0))
+  const h = Math.floor(safe / 3600)
+  const m = Math.floor((safe % 3600) / 60)
+  const s = safe % 60
+  const parts = []
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0 || h > 0) parts.push(`${m}m`)
+  parts.push(`${s}s`)
+  return parts.join(' ')
+}
+
+function MonthlyStreakCard({ sessions, expandable = true }) {
+  const [showFull, setShowFull] = useState(false)
+  const now = new Date()
+  const [anchor, setAnchor] = useState({ year: now.getFullYear(), month: now.getMonth() })
+  const [viewMode, setViewMode] = useState('month')
+  const todayStr = localDateStr(new Date())
+
+  const year = anchor.year
+  const month = anchor.month
+  const monthName = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  const daySeconds = useMemo(() => {
+    const map = {}
+    sessions.forEach((s) => {
+      const ds = localDateStr(s.startTime || s.started_at)
+      if (!ds) return
+      const parts = ds.split('-').map(Number)
+      if (parts[0] !== year || parts[1] !== month + 1) return
+      const secs = sessionSeconds(s)
+      if (secs > 0) map[ds] = (map[ds] || 0) + secs
+    })
+    return map
+  }, [sessions, year, month])
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7
+
+  const cells = useMemo(() => {
+    const list = []
+    for (let i = 0; i < firstWeekday; i++) list.push(null)
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${year}-${pad2(month + 1)}-${pad2(d)}`
+      const seconds = daySeconds[ds] || 0
+      list.push({
+        day: d,
+        dateStr: ds,
+        seconds,
+        minutes: Math.round(seconds / 60),
+        studied: seconds > 0,
+        isToday: ds === todayStr,
+        weekday: STREAK_WEEKDAY_LABELS[(firstWeekday + d - 1) % 7],
+      })
+    }
+    while (list.length % 7 !== 0) list.push(null)
+    return list
+  }, [firstWeekday, daysInMonth, daySeconds, todayStr, year, month])
+
+  const studiedDays = useMemo(
+    () => cells.filter(c => c && c.studied).sort((a, b) => a.dateStr.localeCompare(b.dateStr)),
+    [cells]
+  )
+
+  const totalMonthSeconds = useMemo(() => studiedDays.reduce((sum, c) => sum + c.seconds, 0), [studiedDays])
+
+  const { bestStreak, currentStreak } = useMemo(() => {
+    const ord = (ds) => {
+      const p = parseLocalDate(ds)
+      return p ? Math.floor(p.getTime() / 86400000) : 0
+    }
+    let best = 0
+    let run = 0
+    let prev = null
+    studiedDays.forEach((c) => {
+      const o = ord(c.dateStr)
+      if (prev !== null && o - prev === 1) run += 1
+      else run = 1
+      prev = o
+      if (run > best) best = run
+    })
+
+    let current = 0
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
+    if (isCurrentMonth) {
+      let cursor = new Date()
+      const studiedSet = new Set(studiedDays.map(c => c.dateStr))
+      if (!studiedSet.has(localDateStr(cursor))) cursor.setDate(cursor.getDate() - 1)
+      while (studiedSet.has(localDateStr(cursor))) {
+        current += 1
+        cursor.setDate(cursor.getDate() - 1)
+      }
+    }
+    return { bestStreak: best, currentStreak: current }
+  }, [studiedDays, year, month, now])
+
+  const weeks = useMemo(() => {
+    const groups = []
+    let week = []
+    cells.forEach((c) => {
+      week.push(c)
+      if (week.length === 7) {
+        groups.push(week)
+        week = []
+      }
+    })
+    if (week.length) groups.push(week)
+    return groups
+  }, [cells])
+
+  const navigate = (dir) => {
+    setAnchor(({ year: y, month: m }) => {
+      let nm = m + dir
+      let ny = y
+      if (nm < 0) { nm = 11; ny -= 1 }
+      if (nm > 11) { nm = 0; ny += 1 }
+      return { year: ny, month: nm }
+    })
+  }
+
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
+
+  return (
+    <>
+    <div className="chart-card monthly-streak-card">
+      <div className="chart-card-header">
+        <h3 className="chart-card-title">
+          <Flame size={14} className="monthly-streak-title-icon" />
+          Monthly Streak
+          {expandable && (
+            <button
+              type="button"
+              className="monthly-expand-btn"
+              onClick={() => setShowFull(true)}
+              aria-label="Full view"
+              title="Full view"
+            >
+              <Maximize2 size={14} />
+            </button>
+          )}
+        </h3>
+        <div className="chart-card-header-actions">
+          <div className="monthly-nav">
+            <button type="button" className="monthly-nav-btn" onClick={() => navigate(-1)} aria-label="Previous month">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="monthly-nav-label">{monthName}</span>
+            <button
+              type="button"
+              className="monthly-nav-btn"
+              onClick={() => navigate(1)}
+              disabled={isCurrentMonth}
+              aria-label="Next month"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <Tabs
+            className="monthly-view-tabs"
+            tabs={[
+              { id: 'month', label: 'Month' },
+              { id: 'week', label: 'Week' },
+            ]}
+            activeTab={viewMode}
+            onChange={setViewMode}
+          />
+        </div>
+      </div>
+
+      <div className="monthly-streak-summary">
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">{isCurrentMonth ? 'Current Streak' : 'Streak'}</span>
+          <span className="monthly-streak-stat-value">{isCurrentMonth ? currentStreak : bestStreak} <span className="monthly-streak-stat-unit">days</span></span>
+        </div>
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">Best Streak</span>
+          <span className="monthly-streak-stat-value">{bestStreak} <span className="monthly-streak-stat-unit">days</span></span>
+        </div>
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">Study Days</span>
+          <span className="monthly-streak-stat-value">{studiedDays.length} <span className="monthly-streak-stat-unit">days</span></span>
+        </div>
+        <div className="monthly-streak-stat">
+          <span className="monthly-streak-stat-label">Total Hours</span>
+          <span className="monthly-streak-stat-value">{formatStreakDuration(totalMonthSeconds)}</span>
+        </div>
+      </div>
+
+      {viewMode === 'month' && (
+        <div className="monthly-calendar">
+          <div className="monthly-calendar-weekdays">
+            {STREAK_WEEKDAY_LABELS.map((w) => (
+              <span key={w} className="monthly-calendar-weekday">{w}</span>
+            ))}
+          </div>
+          <div className="monthly-calendar-grid">
+            {cells.map((c, i) => {
+              if (!c) return <div key={i} className="monthly-calendar-cell empty" />
+              const cellInfo = c.isToday && !c.studied
+                ? { bg: '#5B3FD6', dark: true }
+                : streakCellInfo(c.minutes)
+              return (
+                <div
+                  key={i}
+                  className={`monthly-calendar-cell ${c.studied ? 'studied' : ''} ${cellInfo.dark ? 'dark' : ''} ${c.isToday ? 'today' : ''}`}
+                  style={{ backgroundColor: cellInfo.bg }}
+                  title={`${c.dateStr}: ${monthCellHours(c.seconds)}`}
+                >
+                  <span className="monthly-calendar-date">{c.day}</span>
+                  <span className="monthly-calendar-hours">{c.studied ? monthCellHours(c.seconds) : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'week' && (
+        <div className="monthly-week-view">
+          {weeks.map((week, wi) => {
+            const weekSeconds = week.filter(Boolean).reduce((sum, c) => sum + c.seconds, 0)
+            return (
+              <div key={wi} className="monthly-week-row">
+                <div className="monthly-week-cells">
+                  {STREAK_WEEKDAY_LABELS.map((w, di) => {
+                    const c = week[di]
+                    if (!c) return <div key={di} className="monthly-week-cell empty" />
+                    const cellInfo = c.isToday && !c.studied
+                      ? { bg: '#5B3FD6', dark: true }
+                      : streakCellInfo(c.minutes)
+                    return (
+                      <div
+                        key={di}
+                        className={`monthly-week-cell ${c.studied ? 'studied' : ''} ${cellInfo.dark ? 'dark' : ''} ${c.isToday ? 'today' : ''}`}
+                        style={{ backgroundColor: cellInfo.bg }}
+                        title={`${c.dateStr}: ${monthCellHours(c.seconds)}`}
+                      >
+                        <span className="monthly-week-cell-weekday">{w}</span>
+                        <span className="monthly-week-cell-date">{c.day}</span>
+                        <span className="monthly-week-cell-hours">{c.studied ? monthCellHours(c.seconds) : '—'}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="monthly-week-total">
+                  <span className="monthly-week-total-value">{formatStreakDuration(weekSeconds)}</span>
+                  <span className="monthly-week-total-label">Week {wi + 1}</span>
+                </div>
+              </div>
+            )
+          })}
+          {weeks.length === 0 && <p className="empty-state-desc">No weeks to display</p>}
+        </div>
+      )}
+
+      <div className="monthly-streak-footer">
+        <span>Week starting Monday</span>
+        <span className="monthly-streak-legend">
+          <span className="monthly-legend-swatch" style={{ backgroundColor: '#F1F3F9' }} />0
+          <span className="monthly-legend-swatch" style={{ backgroundColor: 'rgb(169, 169, 169)' }} />1h
+          <span className="monthly-legend-swatch" style={{ backgroundColor: 'rgb(255, 205, 0)' }} />3h
+          <span className="monthly-legend-swatch" style={{ backgroundColor: 'rgb(247, 255, 0)' }} />5h
+          <span className="monthly-legend-swatch" style={{ backgroundColor: '#5B3FD6' }} />7h+
+        </span>
+      </div>
+    </div>
+    {expandable && (
+      <Dialog isOpen={showFull} onClose={() => setShowFull(false)} title="Monthly Streak" size="lg" className="streak-dialog">
+        <MonthlyStreakCard sessions={sessions} expandable={false} />
+      </Dialog>
+    )}
+    </>
+  )
 }
 
 function StatisticsRail({ sessions, bookmarks }) {
@@ -177,6 +476,7 @@ function StatisticsRail({ sessions, bookmarks }) {
 
   return (
     <div className="statistics-rail">
+      <MonthlyStreakCard sessions={sessions} />
       <div className="rail-card streak-card">
         <h3 className="rail-card-title">Current Streak</h3>
         <div className="streak-body">
