@@ -3,7 +3,7 @@ import {
   Plus, Search, CalendarDays, Clock3, Pencil, MoreVertical, Check,
   RotateCcw, Trash2, Eye, Bell, BellOff, ChevronLeft, ChevronRight,
   Timer, ExternalLink, ArrowUpDown, Filter, X, Copy, Flame, Target,
-  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List, Briefcase,
+  FileText, CheckCircle2, BarChart3, ArrowRight, LayoutGrid, List, Briefcase, SlidersHorizontal,
 } from 'lucide-react'
 import { useAuthStore } from '../hooks/useStore'
 import { useExamStore, useExamNow } from '../hooks/useExamStore'
@@ -40,6 +40,35 @@ function formatExamDateShort(dateStr) {
   const d = parseLocalDate(dateStr) || new Date(dateStr)
   if (!d || Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function examWeekdayShort(dateStr) {
+  if (!dateStr) return ''
+  const d = parseLocalDate(dateStr) || new Date(dateStr)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { weekday: 'short' })
+}
+
+function examWeekdayLong(dateStr) {
+  if (!dateStr) return ''
+  const d = parseLocalDate(dateStr) || new Date(dateStr)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { weekday: 'long' })
+}
+
+function dayPeriod(timeStr) {
+  if (!timeStr) return ''
+  const m = String(timeStr).match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i)
+  if (!m) return ''
+  let h = parseInt(m[1], 10)
+  const ap = (m[3] || '').toUpperCase()
+  if (ap === 'PM' && h < 12) h += 12
+  if (ap === 'AM' && h === 12) h = 0
+  if (h < 5) return 'Night'
+  if (h < 12) return 'Morning'
+  if (h < 17) return 'Afternoon'
+  if (h < 21) return 'Evening'
+  return 'Night'
 }
 
 /** Dropdown with an "Add new" option so users can add their own types. */
@@ -251,7 +280,8 @@ export function ExamCounter() {
     if (!el) return
     // Step exactly one card per click for a smooth paged feel.
     const card = el.querySelector('.exam-card')
-    const step = card ? card.offsetWidth + 14 : Math.max(240, el.clientWidth * 0.8)
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 14
+    const step = card ? card.offsetWidth + gap : Math.max(240, el.clientWidth * 0.8)
     el.scrollBy({ left: dir * step, behavior: 'smooth' })
   }
 
@@ -761,28 +791,37 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
   return (
     <div className={cn('exam-card', popup && 'exam-card-popup')} onClick={onDetails} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onDetails() }}>
-      <div className="exam-card-top" onClick={(e) => e.stopPropagation()}>
-        <span className="exam-card-name" title={exam.exam_name}>{exam.exam_name}</span>
-        <ExamMenu exam={exam} menuOpen={menuOpen} onMenu={onMenu} onToggle={onToggle} onEdit={onEdit}
-          onDetails={onDetails} onDelete={onDelete} onRestore={onRestore} onDuplicate={onDuplicate} menuRef={menuRef} />
+      <div className="exam-card-head" onClick={(e) => e.stopPropagation()}>
+        <span className="exam-top-icon"><Timer size={16} /></span>
+        <div className="exam-head-main">
+          <div className="exam-head-row">
+            <span className="exam-card-name" title={exam.exam_name}>{exam.exam_name}</span>
+            <ExamMenu exam={exam} menuOpen={menuOpen} onMenu={onMenu} onToggle={onToggle} onEdit={onEdit}
+              onDetails={onDetails} onDelete={onDelete} onRestore={onRestore} onDuplicate={onDuplicate} menuRef={menuRef} />
+          </div>
+          <span className="exam-foot-pills exam-badges-row">
+            <span className={cn('exam-status', meta.className)}>{meta.label}</span>
+            {exam.category && <span className="exam-tag exam-tag-cat">{exam.category}</span>}
+          </span>
+        </div>
       </div>
 
-      <div className="exam-count exam-count-inline">
-        <span className="exam-count-num"><RollingCounter text={days ?? '—'} /></span>
-        <span className="exam-count-unit">{days === 0 ? 'today' : days === 1 ? 'day left' : 'days left'}</span>
+      <div className="exam-info-pill">
+        <div className="exam-info-col">
+          <span className="exam-count-num"><RollingCounter text={days ?? '—'} /></span>
+          <span className="exam-count-unit">{days === 0 ? 'today' : days === 1 ? 'day left' : 'days left'}</span>
+        </div>
+        <span className="exam-info-sep" />
+        <div className="exam-info-col exam-info-col-main">
+          <span className="exam-info-date">{formatExamDateShort(exam.exam_date)}</span>
+          <span className="exam-info-sub">{examWeekdayLong(exam.exam_date)}</span>
+        </div>
+        <span className="exam-info-sep" />
+        <div className="exam-info-col">
+          <span className="exam-info-time">{exam.exam_time ? formatExamTime(exam.exam_time) : '—'}</span>
+          <span className="exam-info-sub">{dayPeriod(exam.exam_time)}</span>
+        </div>
       </div>
-
-      <div className="exam-card-datetime">
-        <span>📅 {popup ? formatExamDateShort(exam.exam_date) : formatExamDate(exam.exam_date)}</span>
-        {exam.exam_time && <span>🕐 {formatExamTime(exam.exam_time)}</span>}
-      </div>
-
-      {popup && (
-        <span className="exam-foot-pills">
-          <span className={cn('exam-status', meta.className)}>{meta.label}</span>
-          {exam.category && <span className="exam-tag exam-tag-cat">{exam.category}</span>}
-        </span>
-      )}
 
       <div className="exam-card-foot" onClick={(e) => e.stopPropagation()}>
         {popup ? (
@@ -802,10 +841,6 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
           </span>
         ) : (
           <>
-            <span className="exam-foot-pills">
-              <span className={cn('exam-status', meta.className)}>{meta.label}</span>
-              {exam.category && <span className="exam-tag exam-tag-cat">{exam.category}</span>}
-            </span>
             <span className="exam-foot-actions">
               <button
                 className={cn('exam-icon-btn', exam.completed ? 'exam-icon-done' : 'exam-icon-todo')}
@@ -815,9 +850,11 @@ function ExamCard({ exam, now, menuOpen, onMenu, onToggle, onEdit, onDetails, on
               >
                 <Check size={14} />
               </button>
-              <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
-              <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
+              <button className="exam-edit-pill" onClick={onEdit} aria-label="Edit exam" title="Edit exam">
+                <span className="exam-edit-pill-icon"><Pencil size={13} /></span> Edit
+              </button>
             </span>
+            <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
           </>
         )}
       </div>
@@ -886,6 +923,7 @@ function ExamListRow({ exam, now, onToggle, onEdit, onDelete, onDetails }) {
         {days === null ? '—' : days === 0 ? 'Today' : days === 1 ? '1 day' : `${days} days`}
       </span>
       <span className={cn('exam-status', meta.className)}>{meta.label}</span>
+      {exam.category && <span className="exam-tag exam-tag-cat">{exam.category}</span>}
       <span className="exam-foot-actions" onClick={(e) => e.stopPropagation()}>
         <button className="exam-icon-btn" onClick={onEdit} aria-label="Edit exam" title="Edit exam"><Pencil size={14} /></button>
         <button className="exam-icon-btn exam-icon-danger" onClick={onDelete} aria-label="Delete exam" title="Delete exam"><Trash2 size={14} /></button>
@@ -904,11 +942,33 @@ function AllExamsDialog({
   const [sort, setSort] = useState('nearest')
   const [category, setCategory] = useState('all')
   const [recruiter, setRecruiter] = useState('all')
+  const [showFilters, setShowFilters] = useState(false)
+  const [dSection, setDSection] = useState('category')
+  const [dCategory, setDCategory] = useState('all')
+  const [dRecruiter, setDRecruiter] = useState('all')
+  const [dSort, setDSort] = useState('nearest')
 
   const recruiterOptions = useMemo(
-    () => [...new Set(exams.map((e) => e.recruiter).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    () => [...new Set(exams.map((e) => e.recruiter ?? e.subject).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [exams]
   )
+
+  const openFilters = () => {
+    setDSection('category')
+    setDCategory(category)
+    setDRecruiter(recruiter)
+    setDSort(sort)
+    setShowFilters(true)
+  }
+
+  const applyFilters = () => {
+    setCategory(dCategory)
+    setRecruiter(dRecruiter)
+    setSort(dSort)
+    setShowFilters(false)
+  }
+
+  const hasActiveFilters = category !== 'all' || recruiter !== 'all' || sort !== 'nearest'
 
   const counts = useMemo(() => {
     const c = { all: exams.length, upcoming: 0, today: 0, tomorrow: 0, completed: 0, passed: 0 }
@@ -931,6 +991,7 @@ function AllExamsDialog({
   }, [exams, query, filter, category, recruiter, sort, now])
 
   return (
+    <>
     <Dialog
       isOpen={open}
       onClose={onClose}
@@ -943,41 +1004,15 @@ function AllExamsDialog({
         </Button>
       }
     >
-      <div className="exam-all-toolbar">
-        <div className="exam-search">
-          <Search size={16} className="exam-search-icon" />
-          <input
-            className="exam-search-input"
-            placeholder="Search exams by name, recruiter, category..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button className="exam-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
-              <X size={14} />
-            </button>
-          )}
+      <div className="exam-all-hero">
+        <div className="exam-all-hero-text">
+          <h3>All Upcoming Exams</h3>
+          <p>Browse, search and manage every exam in one place.</p>
         </div>
-        <div className="exam-select-wrap">
-          <Filter size={14} />
-          <select className="exam-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
-            <option value="all">All Categories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="exam-select-wrap">
-          <Briefcase size={14} />
-          <select className="exam-select" value={recruiter} onChange={(e) => setRecruiter(e.target.value)} aria-label="Filter by recruiter">
-            <option value="all">All Recruiters</option>
-            {recruiterOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
-        <div className="exam-select-wrap">
-          <ArrowUpDown size={14} />
-          <select className="exam-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort exams">
-            {EXAM_SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-        </div>
+        <div className="exam-all-hero-icon"><CalendarDays size={26} /></div>
+      </div>
+
+      <div className="exam-view-toggle-row">
         <div className="exam-schedule-toggle exam-view-toggle">
           <button
             type="button"
@@ -1007,6 +1042,53 @@ function AllExamsDialog({
             {f.label} <span className="exam-chip-count">({counts[f.value] ?? 0})</span>
           </button>
         ))}
+      </div>
+
+      <div className="exam-all-toolbar">
+        <div className="exam-search">
+          <Search size={16} className="exam-search-icon" />
+          <input
+            className="exam-search-input"
+            placeholder="Search exams by name, recruiter, category..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button className="exam-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          className={cn('exam-icon-btn exam-filter-btn', hasActiveFilters && 'has-active')}
+          onClick={openFilters}
+          aria-label="Open filters"
+          title="Filters"
+        >
+          <SlidersHorizontal size={16} />
+          {hasActiveFilters && <span className="exam-filter-btn-dot" />}
+        </button>
+        <div className="exam-select-wrap">
+          <Filter size={14} />
+          <select className="exam-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
+            <option value="all">All Categories</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="exam-select-wrap">
+          <Briefcase size={14} />
+          <select className="exam-select" value={recruiter} onChange={(e) => setRecruiter(e.target.value)} aria-label="Filter by recruiter">
+            <option value="all">All Recruiters</option>
+            {recruiterOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="exam-select-wrap">
+          <ArrowUpDown size={14} />
+          <select className="exam-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort exams">
+            {EXAM_SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {visible.length === 0 ? (
@@ -1047,6 +1129,65 @@ function AllExamsDialog({
         </div>
       )}
     </Dialog>
+
+    <Dialog
+      isOpen={showFilters}
+      onClose={() => setShowFilters(false)}
+      title="Filters"
+      size="sm"
+      footer={
+        <div className="exam-filter-foot">
+          <button type="button" className="exam-filter-foot-btn exam-filter-cancel" onClick={() => setShowFilters(false)}>Cancel</button>
+          <button type="button" className="exam-filter-foot-btn exam-filter-apply" onClick={applyFilters}>Apply</button>
+        </div>
+      }
+    >
+      <div className="exam-filter-body">
+        <div className="exam-filter-labels">
+          {[
+            { id: 'category', label: 'Category' },
+            { id: 'recruiter', label: 'Recruiter' },
+            { id: 'sort', label: 'Sort by' },
+          ].map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={cn('exam-filter-label-btn', dSection === s.id && 'active')}
+              onClick={() => setDSection(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="exam-filter-sep" />
+        <div className="exam-filter-values">
+          {dSection === 'category' && (
+            <>
+              <button type="button" className={cn('exam-chip', dCategory === 'all' && 'exam-chip-active')} onClick={() => setDCategory('all')}>All</button>
+              {categories.map((c) => (
+                <button key={c} type="button" className={cn('exam-chip', dCategory === c && 'exam-chip-active')} onClick={() => setDCategory(c)}>{c}</button>
+              ))}
+            </>
+          )}
+          {dSection === 'recruiter' && (
+            <>
+              <button type="button" className={cn('exam-chip', dRecruiter === 'all' && 'exam-chip-active')} onClick={() => setDRecruiter('all')}>All</button>
+              {recruiterOptions.map((r) => (
+                <button key={r} type="button" className={cn('exam-chip', dRecruiter === r && 'exam-chip-active')} onClick={() => setDRecruiter(r)}>{r}</button>
+              ))}
+            </>
+          )}
+          {dSection === 'sort' && (
+            <>
+              {EXAM_SORTS.map((s) => (
+                <button key={s.value} type="button" className={cn('exam-chip', dSort === s.value && 'exam-chip-active')} onClick={() => setDSort(s.value)}>{s.label}</button>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </Dialog>
+    </>
   )
 }
 

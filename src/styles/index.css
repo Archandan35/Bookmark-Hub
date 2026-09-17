@@ -5869,3 +5869,112 @@ html, body { overflow-x: hidden; overflow-x: clip; }
 @media (max-width: 768px) {
   .header-premium { display: none; }
 }
+
+/* List-row badges stay vertically centered */
+.exam-listrow .exam-tag { align-self: center; }
+
+/* Compact popup grid cards on mobile */
+@media (max-width: 480px) {
+  .exam-all-grid { gap: 10px; }
+  .exam-all-grid .exam-card { padding: 12px; gap: 8px; }
+  .exam-all-grid .exam-count { padding: 0; }
+  .exam-all-grid .exam-count-num { font-size: 30px; }
+  .exam-all-grid .exam-card-datetime { font-size: 12px; }
+  .exam-card-popup .exam-foot-actions-grid { gap: 6px; }
+}
+
+/* Upcoming card: badges under name, pill info row, labeled edit button */
+.exam-badges-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.exam-info-pill { display: flex; align-items: center; gap: 8px; background: var(--bg-tertiary); border: 1px solid var(--color-border-light); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.exam-info-count { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: var(--color-primary); white-space: nowrap; flex-shrink: 0; }
+.exam-info-count .exam-count-num { font-size: 22px; }
+.exam-info-count .exam-count-unit { margin-top: 0; }
+.exam-info-sep { width: 1px; align-self: stretch; background: var(--color-border); flex-shrink: 0; }
+.exam-info-date { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exam-info-time { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); white-space: nowrap; flex-shrink: 0; }
+.exam-edit-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--color-border); background: var(--bg-secondary); border-radius: 10px; padding: 2px 10px 2px 2px; font-size: 13px; font-weight: 600; color: var(--color-text-primary); cursor: pointer; font-family: inherit; }
+.exam-edit-pill-icon { width: 24px; height: 24px; border-radius: 7px; background: rgba(91, 63, 214, 0.12); color: var(--color-primary); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.exam-edit-pill:hover { border-color: var(--color-primary); }
+
+/* Upcoming card: purple top icon, purple info row with stacked columns */
+.exam-top-icon { width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg, #5B3FD6, #8B5CF6); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.exam-info-pill { display: flex; align-items: stretch; gap: 8px; background: rgba(91, 63, 214, 0.07); border: 1px solid rgba(91, 63, 214, 0.18); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.exam-info-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; flex: 1 1 0; min-width: 0; text-align: center; }
+.exam-info-col-main { flex: 1 1 0; }
+.exam-info-pill .exam-count-num { font-size: 22px; }
+.exam-info-pill .exam-count-unit { margin-top: 0; font-size: 11px; }
+.exam-info-date { font-size: 13.5px; font-weight: 700; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.exam-info-time { font-size: 13.5px; font-weight: 700; color: var(--color-text-primary); white-space: nowrap; }
+.exam-info-sub { font-size: 11px; font-weight: 500; color: var(--color-text-muted); white-space: nowrap; }
+
+/* Badges sit under the name inside the head stack (no offset needed) */
+/* Compact info row */
+.exam-info-pill { padding: 7px 10px; gap: 6px; border-radius: 10px; }
+.exam-info-pill .exam-count-num { font-size: 19px; }
+.exam-info-pill .exam-count-unit { font-size: 10px; }
+.exam-info-date, .exam-info-time { font-size: 12.5px; }
+.exam-info-sub { font-size: 10px; }
+.exam-info-col { gap: 1px; }
+
+/* Card head: icon stretches to name+badges height, badges need no offset */
+.exam-card-head { display: flex; gap: 10px; align-items: stretch; }
+.exam-top-icon { align-self: center; width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #5B3FD6, #8B5CF6); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.exam-head-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.exam-head-row { display: flex; align-items: center; gap: 10px; }
+.exam-badges-row { margin-left: 0; }
+/* Info row without border */
+.exam-info-pill { border: none; }
+
+/* Mobile slider cards gap */
+@media (max-width: 480px) {
+  .exam-slider { gap: 12px; }
+}
+
+/* Popup filter button (mobile) + filter sheet sections */
+.exam-filter-btn { display: none; position: relative; flex-shrink: 0; }
+.exam-filter-btn-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); }
+.exam-filter-btn.has-active { border-color: var(--color-primary); color: var(--color-primary); }
+.exam-filter-sections { display: flex; flex-direction: column; }
+.exam-filter-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border-light); }
+.exam-filter-row:last-child { border-bottom: none; }
+.exam-filter-label { font-size: 14px; font-weight: 600; color: var(--color-text-primary); text-align: left; }
+@media (max-width: 640px) {
+  .exam-all-dialog .exam-all-toolbar .exam-select-wrap { display: none; }
+  .exam-filter-btn { display: inline-flex; }
+}
+
+/* Flipkart-style filter sheet: labels left, values right, split footer */
+.exam-filter-body { display: flex; min-height: 220px; }
+.exam-filter-labels { width: 118px; flex-shrink: 0; display: flex; flex-direction: column; }
+.exam-filter-label-btn { text-align: left; padding: 12px 10px; font-size: 13.5px; font-weight: 600; color: var(--color-text-secondary); background: transparent; border: none; border-left: 3px solid transparent; cursor: pointer; font-family: inherit; }
+.exam-filter-label-btn.active { color: var(--color-primary); background: rgba(91, 63, 214, 0.07); border-left-color: var(--color-primary); }
+.exam-filter-sep { width: 1px; background: var(--color-border); margin: 0 12px 0 0; align-self: stretch; flex-shrink: 0; }
+.exam-filter-values { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+.exam-filter-foot { display: flex; width: 100%; }
+.exam-filter-foot-btn { flex: 1; background: transparent; border: none; padding: 12px 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; text-align: center; }
+.exam-filter-cancel { color: var(--color-text-secondary); border-right: 1px solid var(--color-border); }
+.exam-filter-apply { color: var(--color-primary); }
+
+/* Mobile popup: hero, toggle, chips, search+filter row, then results */
+@media (max-width: 640px) {
+  .exam-all-dialog .dialog-body { display: flex; flex-direction: column; gap: 12px; }
+  .exam-all-dialog .exam-view-toggle-row { order: 1; }
+  .exam-all-dialog .exam-filter-chips { order: 2; }
+  .exam-all-dialog .exam-all-toolbar { order: 3; margin-bottom: 0; }
+  .exam-all-dialog .exam-all-grid,
+  .exam-all-dialog .exam-all-list { order: 4; margin-top: 0; }
+  .exam-all-dialog .dialog-body > p { order: 4; margin-top: 0; }
+  .exam-all-dialog .exam-all-toolbar .exam-search { flex: 1 1 0; min-width: 0; }
+}
+
+/* View All popup hero + standalone view-toggle row */
+.exam-all-hero { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #4A2FC8, #8B5CF6); border-radius: 14px; padding: 16px 18px; color: #fff; }
+.exam-all-hero-text { flex: 1; min-width: 0; }
+.exam-all-hero-text h3 { font-size: 17px; font-weight: 800; margin: 0; }
+.exam-all-hero-text p { font-size: 12.5px; opacity: 0.85; margin: 4px 0 0 0; }
+.exam-all-hero-icon { width: 46px; height: 46px; border-radius: 13px; background: rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.exam-view-toggle-row { display: flex; }
+.exam-view-toggle-row .exam-view-toggle { width: 260px; margin-bottom: 0; }
+@media (max-width: 640px) {
+  .exam-view-toggle-row .exam-view-toggle { width: 100%; }
+}

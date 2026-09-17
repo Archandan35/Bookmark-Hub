@@ -204,7 +204,7 @@ export function Header({ sidebarCollapsed }) {
                 </div>
               )}
             </div>
-            <button className="header-icon-btn header-hide-sm" onClick={toggleTheme} aria-label="Toggle theme">
+            <button className="header-icon-btn" onClick={toggleTheme} aria-label="Toggle theme" title="Dark / light mode">
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
             <button className="header-icon-btn header-hide-sm" aria-label="Settings" onClick={() => navigate('/settings')}>
