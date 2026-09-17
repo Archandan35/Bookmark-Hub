@@ -126,6 +126,9 @@ export function Header({ sidebarCollapsed }) {
   return (
     <>
       <header className="header">
+        <button className="header-hamburger" onClick={toggleSidebar} aria-label="Toggle sidebar">
+          <Menu size={22} />
+        </button>
         <div className={`header-sidebar-section ${sidebarCollapsed ? 'collapsed' : ''}`}>
           <div className="header-logo">
             <span className="header-logo-icon">📚</span>
@@ -139,9 +142,6 @@ export function Header({ sidebarCollapsed }) {
         </div>
         <div className="header-main-section">
           <div className="header-search-row">
-            <button className="header-hamburger" onClick={toggleSidebar} aria-label="Toggle sidebar">
-              <Menu size={22} />
-            </button>
             <div className="header-center" ref={searchRef}>
               <SearchBar
                 value={searchQuery}

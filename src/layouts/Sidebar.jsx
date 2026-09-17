@@ -83,7 +83,9 @@ export function Sidebar() {
     if (sidebarCollapsed) return
     const onPointerDown = (e) => {
       if (window.innerWidth > 1024) return
-      if (!e.target.closest('.sidebar')) toggleSidebar()
+      // Ignore taps on the hamburger itself — its click handler toggles.
+      if (e.target.closest('.sidebar') || e.target.closest('.header-hamburger')) return
+      toggleSidebar()
     }
     const onKeyDown = (e) => {
       if (e.key === 'Escape' && window.innerWidth <= 1024) toggleSidebar()

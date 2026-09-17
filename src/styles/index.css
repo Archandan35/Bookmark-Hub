@@ -5855,3 +5855,17 @@ html, body { overflow-x: hidden; overflow-x: clip; }
   .exam-toolbar { flex-wrap: wrap; }
   .exam-toolbar .exam-search { flex: 1 1 100%; }
 }
+
+/* Header order: hamburger first, then logo (desktop keeps logo-first DOM order) */
+.header-sidebar-section { order: 1; }
+.header-main-section { order: 2; }
+@media (max-width: 1024px) {
+  .header-hamburger { order: 1; }
+  .header-sidebar-section { order: 2; }
+  .header-main-section { order: 3; }
+}
+
+/* Mobile: hide the premium star next to the profile icon */
+@media (max-width: 768px) {
+  .header-premium { display: none; }
+}
