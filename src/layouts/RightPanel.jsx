@@ -14,6 +14,7 @@ import { BOOKMARK_TYPES } from '../constants'
 import { useLocation } from 'react-router-dom'
 import { GoalsService } from '../services/GoalsService'
 import { useDailyGoal } from '../hooks/useDailyGoal'
+import { ExamsRail } from '../components/exam/ExamsRail'
 
 export function focusScoreFor(durationSeconds) {
   const d = durationSeconds || 0
@@ -795,6 +796,7 @@ export function RightPanel() {
   const isGoalsPage = location.pathname === '/goals'
   const isStatisticsPage = location.pathname === '/statistics'
   const isLearnPage = location.pathname === '/learn'
+  const isExamsPage = location.pathname === '/exams'
 
   const recentBookmarks = [...bookmarks]
     .filter(b => b.last_opened_at)
@@ -859,6 +861,14 @@ export function RightPanel() {
     return (
       <aside className="right-panel learn-right-panel">
         <LearnRail />
+      </aside>
+    )
+  }
+
+  if (isExamsPage) {
+    return (
+      <aside className="right-panel exams-right-panel">
+        <ExamsRail />
       </aside>
     )
   }

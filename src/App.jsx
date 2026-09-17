@@ -29,6 +29,51 @@ function AppLoader() {
   )
 }
 
+const AUTO_REFRESH_KEY = 'bookmarkhub_last_auto_refresh'
+const AUTO_REFRESH_DAYS = 6
+
+/** Reloads the page automatically every 6 days at 00:00 AM. */
+function scheduleAutoRefresh() {
+  const now = new Date()
+  let last = null
+  try {
+    const raw = localStorage.getItem(AUTO_REFRESH_KEY)
+    if (raw) last = new Date(raw)
+  } catch {
+    last = null
+  }
+  if (!last || Number.isNaN(last.getTime())) last = now
+
+  const next = new Date(last)
+  next.setDate(next.getDate() + AUTO_REFRESH_DAYS)
+  next.setHours(0, 0, 0, 0)
+
+  let ms = next.getTime() - now.getTime()
+  if (ms <= 0) {
+    // Missed window (e.g. device was off) — restart the cycle from now.
+    last = now
+    next.setTime(last.getTime())
+    next.setDate(next.getDate() + AUTO_REFRESH_DAYS)
+    next.setHours(0, 0, 0, 0)
+    ms = next.getTime() - now.getTime()
+  }
+
+  try {
+    localStorage.setItem(AUTO_REFRESH_KEY, last.toISOString())
+  } catch {
+    // ignore storage errors
+  }
+
+  return setTimeout(() => {
+    try {
+      localStorage.setItem(AUTO_REFRESH_KEY, new Date().toISOString())
+    } catch {
+      // ignore storage errors
+    }
+    window.location.reload()
+  }, ms)
+}
+
 export default function App() {
   const { setInitialized, setUser, setSession } = useAuthStore()
   const { theme } = useAppStore()
@@ -71,6 +116,11 @@ export default function App() {
       return () => subscription?.unsubscribe()
     }
   }, [setInitialized, setUser, setSession])
+
+  useEffect(() => {
+    const timer = scheduleAutoRefresh()
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     if (theme === 'dark') {

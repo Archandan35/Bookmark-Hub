@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Bell, Settings, Moon, Sun, LogOut, User, Star, Menu, X,
+  Plus, Bell, Settings, Moon, Sun, LogOut, User, Star, Menu, X, RefreshCw,
 } from 'lucide-react'
 import { Button } from '../components/Button'
 import { SearchBar } from '../components/SearchBar'
@@ -139,6 +139,14 @@ export function Header({ sidebarCollapsed }) {
             </button>
             <button className="header-icon-btn" aria-label="Settings" onClick={() => navigate('/settings')}>
               <Settings size={20} />
+            </button>
+            <button
+              className="header-icon-btn"
+              aria-label="Refresh page"
+              title="Refresh page"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw size={20} />
             </button>
             <Dropdown
               trigger={

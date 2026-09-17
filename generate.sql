@@ -1039,3 +1039,35 @@ ON CONFLICT DO NOTHING;
 INSERT INTO public._schema_version (version, description)
 VALUES (3, 'Study session dimensional metadata (source/course/educator/topic/lesson) + study_sources, study_educators, study_courses, study_topics, study_lessons tables + dimension-based goals')
 ON CONFLICT DO NOTHING;
+
+-- ============================================
+-- 16. EXAMS TABLE (Exam Counter page)
+-- Schema version: 4
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.exams (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    exam_name TEXT NOT NULL,
+    exam_date DATE NOT NULL,
+    exam_time TEXT DEFAULT '''',
+    category TEXT DEFAULT '''',
+    subject TEXT DEFAULT '''',
+    description TEXT DEFAULT '''',
+    exam_link TEXT DEFAULT '''',
+    notes TEXT DEFAULT '''',
+    reminder_settings TEXT[] DEFAULT ''{}'',
+    reminders_enabled BOOLEAN DEFAULT true,
+    completed BOOLEAN DEFAULT false,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exams_user_id ON public.exams(user_id);
+CREATE INDEX IF NOT EXISTS idx_exams_user_date ON public.exams(user_id, exam_date);
+ALTER TABLE public.exams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS exams_owner ON public.exams;
+CREATE POLICY exams_owner ON public.exams FOR ALL
+    USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+INSERT INTO public._schema_version (version, description)
+VALUES (4, ''Exam Counter: exams table with countdown source-of-truth exam_date'')
+ON CONFLICT DO NOTHING;

@@ -12,6 +12,7 @@ const Learn = lazy(() => import('../pages/Learn').then((m) => ({ default: m.Lear
 const Settings = lazy(() => import('../pages/Settings').then((m) => ({ default: m.Settings })))
 const Trash = lazy(() => import('../pages/Trash').then((m) => ({ default: m.Trash })))
 const Goals = lazy(() => import('../pages/Goals').then((m) => ({ default: m.Goals })))
+const ExamCounter = lazy(() => import('../pages/ExamCounter').then((m) => ({ default: m.ExamCounter })))
 
 
 function PageLoader() {
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
       { path: 'pinned', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'recent', element: <PageWrapper><Bookmarks /></PageWrapper> },
       { path: 'goals', element: <PageWrapper><Goals /></PageWrapper> },
+      { path: 'exams', element: <PageWrapper><ExamCounter /></PageWrapper> },
       { path: 'collections', element: <PageWrapper><Collections /></PageWrapper> },
       { path: 'learn', element: <PageWrapper><Learn /></PageWrapper> },
       { path: 'settings', element: <PageWrapper><Settings /></PageWrapper> },
