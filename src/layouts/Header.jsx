@@ -204,14 +204,14 @@ export function Header({ sidebarCollapsed }) {
                 </div>
               )}
             </div>
-            <button className="header-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
+            <button className="header-icon-btn header-hide-sm" onClick={toggleTheme} aria-label="Toggle theme">
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <button className="header-icon-btn" aria-label="Settings" onClick={() => navigate('/settings')}>
+            <button className="header-icon-btn header-hide-sm" aria-label="Settings" onClick={() => navigate('/settings')}>
               <Settings size={20} />
             </button>
             <button
-              className="header-icon-btn"
+              className="header-icon-btn header-hide-sm"
               aria-label="Refresh page"
               title="Refresh page"
               onClick={() => window.location.reload()}

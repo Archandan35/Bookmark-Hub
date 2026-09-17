@@ -51,7 +51,12 @@ export const ExamRepository = {
         // mirror to local cache so refresh/offline still works
         writeLocal(userId, data || [])
         return data || []
-      } catch {
+      } catch (err) {
+        console.warn(
+          '[exams] Supabase read failed — using device-local data. ' +
+          'Run the exams table migration in generate.sql for cross-device sync.',
+          err?.message || err
+        )
         return readLocal(userId)
       }
     }

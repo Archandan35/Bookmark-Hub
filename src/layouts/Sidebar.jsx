@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import {
   ChevronLeft, ChevronRight, HardDrive, Settings, Plus, Folder, Star,
@@ -67,7 +67,37 @@ export function Sidebar() {
 
   const iconSize = sidebarCollapsed ? 22 : 20
 
+  const location = useLocation()
+  const prevPath = useRef(location.pathname)
+
+  // Mobile overlay: close the sidebar when the route changes.
+  useEffect(() => {
+    if (prevPath.current !== location.pathname) {
+      prevPath.current = location.pathname
+      if (window.innerWidth <= 1024 && !sidebarCollapsed) toggleSidebar()
+    }
+  }, [location.pathname, sidebarCollapsed, toggleSidebar])
+
+  // Mobile overlay: close on outside tap / Escape.
+  useEffect(() => {
+    if (sidebarCollapsed) return
+    const onPointerDown = (e) => {
+      if (window.innerWidth > 1024) return
+      if (!e.target.closest('.sidebar')) toggleSidebar()
+    }
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && window.innerWidth <= 1024) toggleSidebar()
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [sidebarCollapsed, toggleSidebar])
+
   return (
+    <>
     <aside className={cn('sidebar', sidebarCollapsed && 'sidebar-collapsed')}>
       <nav className="sidebar-nav">
         {SIDEBAR_NAV.map((item) => (
@@ -145,5 +175,9 @@ export function Sidebar() {
         </form>
       </Dialog>
     </aside>
+    {!sidebarCollapsed && (
+      <div className="sidebar-backdrop" aria-hidden="true" />
+    )}
+    </>
   )
 }
